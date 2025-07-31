@@ -1,18 +1,27 @@
 """
 Flask + OpenCV + Ultralytics YOLO (웹캠 실시간 스트리밍)
-- 네가 준 순수 스크립트를 베이스로, 웹에서 볼 수 있게 MJPEG 스트림(/video_feed)으로 제공
-- /webcam 페이지에서 <img>로 스트림 표시
-- 좌우반전(flip) 유지, CAP_DSHOW 유지(윈도우 속도 개선), 해상도/FPS 설정 유지
-- Ultralytics 버전에 따라 Results.plot()이 없을 수 있어 수동 그리기 폴백 추가
+
+이 스크립트는 웹브라우저에서 실시간으로 YOLO 객체 검출 결과를 볼 수 있도록
+MJPEG 스트림을 제공합니다. Start Bootstrap의 SB Admin 템플릿을 활용하여
+깔끔한 UI를 제공하며, YOLO 추론 과정은 torch.no_grad() 컨텍스트로 감싸
+메모리 사용을 최소화합니다. 또한 요청을 스레드로 처리하여 모델 실행이
+플라스크 전체를 멈추지 않도록 합니다.
+
+변경 요약:
+- 서버 시작 시 백그라운드 스레드에서만 모델을 실행 (웹은 화면만 구독)
+- Windows 카메라 백엔드: DSHOW → MSMF → ANY 폴백
+- Flask reloader로 인한 이중 실행 방지(use_reloader=False)
+- Python 3.9 호환 타입 주석
 """
 
 import os
 import time
-from pathlib import Path
+import threading
+from typing import Optional
 
 import cv2
 import numpy as np
-from flask import Flask, Response, render_template, request
+from flask import Flask, Response, render_template
 from PIL import Image  # (업로드 기능은 안 쓰지만 PIL 설치 유도 겸)
 import torch
 from ultralytics import YOLO
@@ -20,7 +29,7 @@ from ultralytics import YOLO
 # -----------------------------
 # 기본 설정 (필요시 여기만 수정)
 # -----------------------------
-MODEL_PATH = "./yolo12x.pt"  # 네가 준 코드 그대로
+MODEL_PATH = "./yolo12x.pt"
 CAM_INDEX = 0                # 0: 기본 카메라
 TARGET_W, TARGET_H = 1280, 720
 TARGET_FPS = 60
@@ -41,13 +50,15 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = YOLO(MODEL_PATH).to(device)
 
 # -----------------------------
+# 글로벌 상태 (백그라운드 추론 스레드가 계속 갱신)
+# -----------------------------
+output_frame = None  # type: Optional[np.ndarray]
+frame_lock = threading.Lock()
+
+# -----------------------------
 # 박스 직접 그리기(Results.plot() 폴백)
 # -----------------------------
 def draw_from_boxes(res, model, canvas: np.ndarray) -> np.ndarray:
-    """
-    Ultralytics Results 객체에서 boxes를 읽어 수동으로 박스/라벨/신뢰도를 그린다.
-    - numpy()를 호출하지 않고 tolist()만 사용 → 'Numpy is not available' 환경에서도 안전
-    """
     out = canvas.copy()
     boxes_obj = getattr(res, "boxes", None)
     if boxes_obj is None:
@@ -71,8 +82,7 @@ def draw_from_boxes(res, model, canvas: np.ndarray) -> np.ndarray:
     names = getattr(model, "names", {})
     if isinstance(names, dict):
         def name_of(i):
-            i = int(i)
-            return names.get(i, str(i))
+            i = int(i); return names.get(i, str(i))
     else:
         def name_of(i):
             i = int(i)
@@ -92,97 +102,153 @@ def draw_from_boxes(res, model, canvas: np.ndarray) -> np.ndarray:
         cv2.rectangle(out, (x1, y1), (x2, y2), (0, 255, 0), 2)
         if label:
             y_text = max(y1 - 5, 15)
-            cv2.putText(
-                out, label, (x1, y_text),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2
-            )
+            cv2.putText(out, label, (x1, y_text),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     return out
 
 # -----------------------------
-# 카메라 열기 (윈도우는 CAP_DSHOW 유지)
+# 카메라 열기 (Windows는 백엔드 폴백 포함)
 # -----------------------------
 def open_camera(index: int) -> cv2.VideoCapture:
+    """
+    Windows: DSHOW 우선 → MSMF → ANY 순으로 시도.
+    Linux/기타: 기본 VideoCapture(index).
+    성공 시 해상도/FPS 및 MJPG 설정을 시도.
+    """
     if os.name == "nt":
-        cap = cv2.VideoCapture(cv2.CAP_DSHOW + index)
+        for api in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):
+            cap = cv2.VideoCapture(index, api)
+            if cap.isOpened():
+                # 해상도/FPS 설정
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH,  TARGET_W)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_H)
+                cap.set(cv2.CAP_PROP_FPS,          TARGET_FPS)
+                # MJPG로 설정(대역폭/지연 개선에 도움이 되는 경우가 많음)
+                try:
+                    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                except Exception:
+                    pass
+                return cap
+        # 열기 실패
+        return cv2.VideoCapture()  # unopened
     else:
         cap = cv2.VideoCapture(index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  TARGET_W)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_H)
-    cap.set(cv2.CAP_PROP_FPS,          TARGET_FPS)
-    return cap
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH,  TARGET_W)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_H)
+            cap.set(cv2.CAP_PROP_FPS,          TARGET_FPS)
+        return cap
 
 # -----------------------------
 # 프레임 제너레이터(MJPEG 스트림)
 # -----------------------------
 def gen_frames():
-    cap = open_camera(CAM_INDEX)
+    """
+    웹 클라이언트에 최신 output_frame만 전송.
+    """
+    global output_frame
+    while True:
+        with frame_lock:
+            frame = None if output_frame is None else output_frame.copy()
+        if frame is None:
+            placeholder = np.ones((480, 640, 3), dtype=np.uint8) * 255
+            cv2.putText(placeholder, "Initializing stream...", (50, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+            ok, buf = cv2.imencode(".jpg", placeholder)
+            if ok:
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" +
+                       buf.tobytes() + b"\r\n")
+            time.sleep(0.05)
+            continue
 
-    # 실제 적용된 값 로그(서버 콘솔에서 확인용)
-    print("RES:", cap.get(cv2.CAP_PROP_FRAME_WIDTH), "x", cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print("FPS:", cap.get(cv2.CAP_PROP_FPS))
-
-    if not cap.isOpened():
-        # 카메라 실패 시, 안내 프레임 반복 송출
-        while True:
-            frame = np.ones((480, 640, 3), dtype=np.uint8) * 255
-            cv2.putText(frame, "웹캠을 열 수 없습니다.", (50, 240),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            ok, buf = cv2.imencode(".jpg", frame)
-            if not ok:
-                break
+        ok, buf = cv2.imencode(".jpg", frame)
+        if ok:
             yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" +
                    buf.tobytes() + b"\r\n")
-        return
+        # 과부하 방지
+        time.sleep(0.01)
 
-    # 렌더 루프
+# -----------------------------
+# 백그라운드 YOLO 추론 루프
+# -----------------------------
+def yolo_inference_loop():
+    """
+    서버 시작 시 1회만 실행되는 백그라운드 스레드:
+    - 카메라에서 프레임 수집
+    - YOLO 추론 및 결과 렌더링
+    - 최신 프레임을 output_frame에 보관
+    카메라 실패 시 재시도(backoff).
+    """
+    global output_frame
+
+    retry = 0
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(0.005)
+        cap = open_camera(CAM_INDEX)
+        if not cap.isOpened():
+            retry += 1
+            wait = min(5.0, 0.5 * retry)
+            print(f"[YOLO THREAD] Camera open failed. retry={retry} wait={wait:.1f}s")
+            time.sleep(wait)
             continue
 
-        # 좌우 반전
-        if FLIP_LR:
-            frame = cv2.flip(frame, 1)
+        print("[YOLO THREAD] RES:", cap.get(cv2.CAP_PROP_FRAME_WIDTH), "x",
+              cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print("[YOLO THREAD] FPS:", cap.get(cv2.CAP_PROP_FPS))
 
-        annotated = frame
+        frame_count = 0
         try:
-            # YOLO 추론
-            results = model(annotated, verbose=False)
-            res = results[0]
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    time.sleep(0.01)
+                    continue
 
-            # 1) 가급적 plot() (네가 준 코드 그대로)
-            #    단, 일부 버전/환경에서 plot()이 없거나(또는 numpy 연동 문제) 예외가 나면
-            #    2) 수동 박스 그리기(draw_from_boxes)로 폴백
+                if FLIP_LR:
+                    frame = cv2.flip(frame, 1)
+
+                annotated = frame
+                try:
+                    with torch.no_grad():
+                        results = model(annotated, verbose=False)
+                    res = results[0]
+
+                    try:
+                        if hasattr(res, "plot"):
+                            annotated = res.plot()
+                        else:
+                            annotated = draw_from_boxes(res, model, annotated)
+                    except Exception:
+                        annotated = draw_from_boxes(res, model, annotated)
+
+                    # GPU 메모리 부담 완화(매 30프레임마다)
+                    frame_count += 1
+                    if device == "cuda" and (frame_count % 30 == 0):
+                        torch.cuda.empty_cache()
+
+                except Exception as e:
+                    annotated = frame.copy()
+                    cv2.putText(annotated, f"Detection error: {type(e).__name__}",
+                                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+                with frame_lock:
+                    output_frame = annotated
+
+                # 너무 빠른 루프 방지
+                time.sleep(0.001)
+
+        finally:
             try:
-                if hasattr(res, "plot"):
-                    annotated = res.plot()  # BGR ndarray
-                else:
-                    annotated = draw_from_boxes(res, model, annotated)
+                cap.release()
             except Exception:
-                annotated = draw_from_boxes(res, model, annotated)
-
-        except Exception as e:
-            # 추론 실패 시 안내 오버레이
-            annotated = frame.copy()
-            cv2.putText(annotated, f"Detection error: {type(e).__name__}",
-                        (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
-        # JPEG 인코딩 후 스트림 전송
-        ok, buf = cv2.imencode(".jpg", annotated)
-        if not ok:
-            continue
-        yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" +
-               buf.tobytes() + b"\r\n")
-
-    cap.release()
+                pass
+            # 카메라가 끊기면 재시도
+            retry = 0
 
 # -----------------------------
 # 라우트
 # -----------------------------
 @app.route("/")
 def index():
-    # 간단히 /webcam으로 리다이렉트하는 형태로 구성해도 됨
     return render_template("webcam.html")
 
 @app.route("/webcam")
@@ -191,7 +257,6 @@ def webcam_page():
 
 @app.route("/video_feed")
 def video_feed():
-    # 브라우저 <img>에서 직접 표시 가능한 MJPEG 스트림
     return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/healthz")
@@ -202,5 +267,8 @@ def healthz():
 # 실행
 # -----------------------------
 if __name__ == "__main__":
-    # 0.0.0.0 바인딩: 같은 네트워크의 다른 기기도 접속 가능
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # 백그라운드 YOLO 추론 스레드 시작 (서버 시작 시 1회만)
+    threading.Thread(target=yolo_inference_loop, daemon=True).start()
+
+    # reloader로 인한 이중 실행 방지(use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=False)
