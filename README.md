@@ -23,6 +23,7 @@ cuDNN 90701 (9.7.1)
 
 ## 3. cuDNN 설치
 [cuDNN 9.7.1 Downloads](https://developer.nvidia.com/cudnn-9-7-1-download-archive)
+
 압축을 해제한 뒤 CUDA 설치 경로에 있는 `include`와 `lib` 폴더에 파일을 복사합니다.
 
 ## 4. 가상환경 구성
@@ -38,5 +39,6 @@ pip install -r requirements.txt
 ## 6. 실행
 ```
 git clone https://github.com/pjs6203/ppe_test.git
+cd ppe_test
 python app.py
 ```
