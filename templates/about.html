@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>About · System Information</title>
+  <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.min.css" rel="stylesheet"/>
+  <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+  <!-- head 끝부분에 추가 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="sb-nav-fixed">
+  <!-- Topbar -->
+  <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
+    <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
+    <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+    <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4"></ul>
+  </nav>
+
+  <div id="layoutSidenav">
+    <!-- Sidebar -->
+    <div id="layoutSidenav_nav">
+      <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
+        <div class="sb-sidenav-menu">
+          <div class="nav">
+            <div class="sb-sidenav-menu-heading">Navigation</div>
+            <a class="nav-link" href="{{ url_for('webcam_page') }}">
+              <div class="sb-nav-link-icon"><i class="fas fa-video"></i></div>
+              Live Detection
+            </a>
+            <a class="nav-link active" href="{{ url_for('about') }}">
+              <div class="sb-nav-link-icon"><i class="fas fa-info-circle"></i></div>
+              About
+            </a>
+          </div>
+        </div>
+      </nav>
+    </div>
+
+    <!-- Content -->
+    <div id="layoutSidenav_content">
+      <main>
+        <div class="container-fluid px-4">
+          <h1 class="mt-4">System Information</h1>
+
+          <!-- Versions -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-code-branch me-1"></i> Versions
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6">
+                  <table class="table table-sm mb-0">
+                    <tbody>
+                      <tr><th class="w-50">Python</th><td>{{ versions.python or 'N/A' }}</td></tr>
+                      <tr><th>PyTorch</th><td>{{ versions.torch or 'N/A' }}</td></tr>
+                      <tr><th>Ultralytics</th><td>{{ versions.ultralytics or 'N/A' }}</td></tr>
+                      <tr><th>OpenCV</th><td>{{ versions.opencv or 'N/A' }}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="col-md-6">
+                  <table class="table table-sm mb-0">
+                    <tbody>
+                      <tr><th class="w-50">CUDA</th><td>{{ versions.cuda or 'N/A' }}</td></tr>
+                      <tr><th>cuDNN</th><td>{{ versions.cudnn or 'N/A' }}</td></tr>
+                      <tr><th>Device</th><td>{{ versions.device }}</td></tr>
+                      <tr><th>GPU(s)</th><td>{% if versions.gpus %}{{ versions.gpus|join(', ') }}{% else %}N/A{% endif %}</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Usage (Live) -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <i class="fas fa-gauge-high me-1"></i> Usage (Live)
+            </div>
+            <div class="card-body">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between">
+                  <span>CPU</span><span id="cpu_label">--%</span>
+                </div>
+                <div class="progress"><div id="cpu_bar" class="progress-bar" style="width:0%"></div></div>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between">
+                  <span>Memory</span><span id="mem_label">--%</span>
+                </div>
+                <div class="progress"><div id="mem_bar" class="progress-bar" style="width:0%"></div></div>
+                <small class="text-muted" id="mem_detail">-- / --</small>
+              </div>
+
+              <!-- GPU 카드들이 들어갈 컨테이너 -->
+              <div id="gpu_container"></div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="py-4 bg-light mt-auto">
+        <div class="container-fluid px-4"><div class="d-flex align-items-center justify-content-between small"></div></div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"></script>
+
+  <script>
+    function humanBytes(n){
+      if (n === null || n === undefined) return 'N/A';
+      const units = ['B','KB','MB','GB','TB']; let i=0; let v = n;
+      while (v >= 1024 && i < units.length-1){ v/=1024; i++; }
+      return v.toFixed(1)+' '+units[i];
+    }
+
+    function renderGPUs(gpus){
+      const wrap = document.getElementById('gpu_container');
+      wrap.innerHTML = '';
+      if(!gpus || !gpus.length){
+        wrap.innerHTML = '<div class="text-muted">No CUDA GPU detected.</div>';
+        return;
+      }
+      gpus.forEach((g)=>{
+        const vramPct = g.vram_percent ?? 0;
+        const sm = (g.sm_util ?? 'N/A');
+        const mc = (g.mem_util ?? 'N/A');
+        const enc = (g.enc_util ?? 'N/A');
+        const dec = (g.dec_util ?? 'N/A');
+        const pcie = (g.pcie_rx_kbs!=null && g.pcie_tx_kbs!=null)
+          ? `PCIe RX ${g.pcie_rx_kbs} KB/s · TX ${g.pcie_tx_kbs} KB/s` : '';
+
+        const card = document.createElement('div');
+        card.className = 'mb-3';
+        card.innerHTML = `
+          <div class="d-flex justify-content-between">
+            <span>GPU ${g.index}: ${g.name}</span>
+            <span>SM Util: ${sm}%</span>
+          </div>
+          <div class="progress"><div class="progress-bar bg-success" style="width:${vramPct}%"></div></div>
+          <small class="text-muted d-block">VRAM ${humanBytes(g.vram_used)} / ${humanBytes(g.vram_total)} (${vramPct}%)</small>
+          <small class="text-muted d-block">Mem Ctrl: ${mc}% · Enc: ${enc}% · Dec: ${dec}%</small>
+          <small class="text-muted">${pcie}</small>
+        `;
+        wrap.appendChild(card);
+      });
+    }
+
+    async function refresh(){
+      try {
+        const r = await fetch('{{ url_for("api_system_metrics") }}');
+        const d = await r.json();
+
+        // CPU
+        const cpuPct = (d.cpu_percent ?? 0);
+        document.getElementById('cpu_label').textContent = cpuPct + '%';
+        document.getElementById('cpu_bar').style.width = cpuPct + '%';
+
+        // Memory
+        const memPct = (d.mem_percent ?? 0);
+        document.getElementById('mem_label').textContent = memPct.toFixed(1) + '%';
+        document.getElementById('mem_bar').style.width = memPct + '%';
+        document.getElementById('mem_detail').textContent =
+          humanBytes(d.mem_used) + ' / ' + humanBytes(d.mem_total);
+
+        // GPUs
+        renderGPUs(d.gpus);
+      } catch(e) {
+        console.error(e);
+      }
+    }
+    refresh();
+    setInterval(refresh, 1000); // 1초마다 갱신
+  </script>
+</body>
+</html>

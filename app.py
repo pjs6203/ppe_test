@@ -26,6 +26,218 @@ from PIL import Image  # (업로드 기능은 안 쓰지만 PIL 설치 유도 �
 import torch
 from ultralytics import YOLO
 
+
+from flask import Flask, Response, render_template, jsonify
+import platform, psutil, json, subprocess
+
+# 선택: NVML을 쓰면 GPU util%까지 안정적으로 나옵니다.
+try:
+    import pynvml as nvml
+    _NVML = True
+except Exception:
+    _NVML = False
+
+
+def get_system_versions():
+    py = platform.python_version()
+    torch_v = getattr(torch, "__version__", None)
+    cuda_v = getattr(torch.version, "cuda", None)
+    cudnn_v = None
+    try:
+        cudnn_v = torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else None
+    except Exception:
+        cudnn_v = None
+
+    ul_v = None
+    try:
+        from ultralytics import __version__ as ul_ver
+        ul_v = ul_ver
+    except Exception:
+        pass
+
+    cv_v = None
+    try:
+        import cv2
+        cv_v = cv2.__version__
+    except Exception:
+        pass
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    gpus = []
+    if device == "cuda":
+        try:
+            for i in range(torch.cuda.device_count()):
+                gpus.append(torch.cuda.get_device_name(i))
+        except Exception:
+            pass
+
+    return {
+        "python": py,
+        "torch": torch_v,
+        "cuda": cuda_v,
+        "cudnn": cudnn_v,
+        "ultralytics": ul_v,
+        "opencv": cv_v,
+        "device": device,
+        "gpus": gpus,
+    }
+
+def _try_nvml_usage():
+    """NVML 우선 사용: SM(Util), MemCtrl(Util), Encoder/Decoder, PCIe RX/TX, VRAM"""
+    if not _NVML:
+        # print("[METRICS] NVML module not importable")
+        return None
+    try:
+        nvml.nvmlInit()
+    except Exception as e:
+        # print(f"[METRICS] NVML init failed: {e}")
+        return None
+
+    try:
+        g_list = []
+        count = nvml.nvmlDeviceGetCount()
+        for i in range(count):
+            h = nvml.nvmlDeviceGetHandleByIndex(i)
+            try:
+                name = nvml.nvmlDeviceGetName(h).decode()
+            except Exception:
+                name = "GPU"
+
+            # VRAM
+            mem = nvml.nvmlDeviceGetMemoryInfo(h)
+
+            # Utilization (SM & MemCtrl)
+            try:
+                util = nvml.nvmlDeviceGetUtilizationRates(h)  # .gpu, .memory
+                sm_util = int(util.gpu)       # Compute
+                mem_util = int(util.memory)   # Memory Controller
+            except Exception:
+                sm_util = None
+                mem_util = None
+
+            # Encoder/Decoder utilization
+            try:
+                enc_util, _ = nvml.nvmlDeviceGetEncoderUtilization(h)
+            except Exception:
+                enc_util = None
+            try:
+                dec_util, _ = nvml.nvmlDeviceGetDecoderUtilization(h)
+            except Exception:
+                dec_util = None
+
+            # PCIe Throughput (KB/s)
+            try:
+                tx_kbs = nvml.nvmlDeviceGetPcieThroughput(h, nvml.NVML_PCIE_UTIL_TX_BYTES)
+                rx_kbs = nvml.nvmlDeviceGetPcieThroughput(h, nvml.NVML_PCIE_UTIL_RX_BYTES)
+            except Exception:
+                tx_kbs = None
+                rx_kbs = None
+
+            g_list.append({
+                "index": i,
+                "name": name,
+                "vram_total": int(mem.total),
+                "vram_used": int(mem.used),
+                "sm_util": sm_util,
+                "mem_util": mem_util,
+                "enc_util": enc_util,
+                "dec_util": dec_util,
+                "pcie_tx_kbs": tx_kbs,
+                "pcie_rx_kbs": rx_kbs,
+            })
+        nvml.nvmlShutdown()
+        return g_list
+    except Exception:
+        try:
+            nvml.nvmlShutdown()
+        except Exception:
+            pass
+        return None
+
+def _try_nvidia_smi_usage():
+    """nvidia-smi 파싱(대안). SM(Util) + MemCtrl(Util) 확보."""
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi",
+             "--query-gpu=name,memory.total,memory.used,utilization.gpu,utilization.memory",
+             "--format=csv,noheader,nounits"],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        g_list = []
+        for idx, line in enumerate(out.splitlines()):
+            # name, total(MB), used(MB), sm%, memctrl%
+            name, total, used, sm, memc = [x.strip() for x in line.split(",")]
+            g_list.append({
+                "index": idx,
+                "name": name,
+                "vram_total": int(float(total)) * 1024**2,  # MB -> bytes
+                "vram_used":  int(float(used))  * 1024**2,  # MB -> bytes
+                "sm_util":    int(float(sm)),
+                "mem_util":   int(float(memc)),
+                "enc_util":   None,
+                "dec_util":   None,
+                "pcie_tx_kbs": None,
+                "pcie_rx_kbs": None,
+            })
+        return g_list if g_list else None
+    except Exception:
+        return None
+
+
+def _torch_mem_usage_fallback():
+    """마지막 수단: torch API로 VRAM만 대략 추정(프로세스 기준). util% 없음."""
+    if not torch.cuda.is_available():
+        return None
+    g_list = []
+    try:
+        for i in range(torch.cuda.device_count()):
+            torch.cuda.set_device(i)
+            total = torch.cuda.get_device_properties(i).total_memory
+            # mem_get_info: (free, total)
+            try:
+                free, total2 = torch.cuda.mem_get_info(i)
+                used = total2 - free
+                total = total2
+            except Exception:
+                # fallback: reserved/allocated 합산(덜 정확)
+                used = torch.cuda.memory_reserved(i)
+            g_list.append({
+                "index": i,
+                "name": torch.cuda.get_device_name(i),
+                "vram_total": int(total),
+                "vram_used": int(used),
+                "util": None,
+            })
+        return g_list
+    except Exception:
+        return None
+
+
+def get_system_usage():
+    cpu = psutil.cpu_percent(interval=0.2)
+    mem = psutil.virtual_memory()
+    usage = {
+        "cpu_percent": cpu,
+        "mem_total": int(mem.total),
+        "mem_used": int(mem.used),
+        "mem_percent": float(mem.percent),
+        "gpus": [],
+    }
+
+    # GPU 정보: NVML → nvidia-smi → torch 순으로 시도
+    g = _try_nvml_usage() or _try_nvidia_smi_usage() or _torch_mem_usage_fallback()
+    if g:
+        for gpu in g:
+            total = gpu["vram_total"]
+            used = gpu["vram_used"]
+            percent = round(used / total * 100, 1) if total else None
+            usage["gpus"].append({
+                **gpu,
+                "vram_percent": percent,
+            })
+    return usage
+
+
 # -----------------------------
 # 기본 설정 (필요시 여기만 수정)
 # -----------------------------
@@ -262,6 +474,16 @@ def video_feed():
 @app.route("/healthz")
 def healthz():
     return {"status": "ok"}
+
+@app.route("/about")
+def about():
+    versions = get_system_versions()
+    return render_template("about.html", versions=versions)
+
+@app.route("/api/system_metrics")
+def api_system_metrics():
+    return jsonify(get_system_usage())
+
 
 # -----------------------------
 # 실행
