@@ -1,21 +1,9 @@
 <!DOCTYPE html>
-<!--
-    YOLO Real‑Time Detection Page
-
-    This page is styled using Start Bootstrap's SB Admin template via
-    a CDN.  It includes a responsive sidebar, a top navigation bar, and
-    a content area where the live webcam feed is displayed in a card.
-    The sidebar provides simple navigation links (e.g. back to the
-    upload page) and can be toggled on smaller screens using the
-    hamburger button in the top navbar.  The template works with
-    Flask/Jinja by preserving the original url_for calls and can be
-    dropped straight into a Flask project's templates folder.
--->
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>YOLO Real‑Time Detection</title>
+    <title>YOLO Real-Time Detection</title>
     <!-- SB Admin CSS (includes Bootstrap 5 and custom styles) -->
     <link
         href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.min.css"
@@ -30,44 +18,30 @@
 <body class="sb-nav-fixed">
     <!-- Top navigation bar -->
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <!-- Brand -->
-        <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
-        <!-- Sidebar Toggle -->
-        <button
-            class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0"
-            id="sidebarToggle"
-            href="#"
-        >
+        <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
+        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#">
             <i class="fas fa-bars"></i>
         </button>
-        <!-- Right‑aligned navbar items -->
-        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
-            <li class="nav-item dropdown">
-
-
-            </li>
-        </ul>
+        <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4"></ul>
     </nav>
 
     <div id="layoutSidenav">
-        <!-- Sidebar navigation -->
+        <!-- Sidebar -->
         <div id="layoutSidenav_nav">
             <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
                 <div class="sb-sidenav-menu">
-                <div class="nav">
-                    <div class="sb-sidenav-menu-heading">Navigation</div>
-                    <!-- Current page link -->
-                    <a class="nav-link active" href="{{ url_for('webcam_page') }}">
-                        <div class="sb-nav-link-icon"><i class="fas fa-video"></i></div>
-                        Live Detection
-                    </a>
-                    <a class="nav-link" href="{{ url_for('about') }}">
-                        <div class="sb-nav-link-icon"><i class="fas fa-info-circle"></i></div>
-                        About
-                    </a>
+                    <div class="nav">
+                        <div class="sb-sidenav-menu-heading">Navigation</div>
+                        <a class="nav-link active" href="{{ url_for('webcam_page') }}">
+                            <div class="sb-nav-link-icon"><i class="fas fa-video"></i></div>
+                            Live Detection
+                        </a>
+                        <a class="nav-link" href="{{ url_for('about') }}">
+                            <div class="sb-nav-link-icon"><i class="fas fa-info-circle"></i></div>
+                            About
+                        </a>
+                    </div>
                 </div>
-                </div>
-
             </nav>
         </div>
 
@@ -75,50 +49,88 @@
         <div id="layoutSidenav_content">
             <main>
                 <div class="container-fluid px-4">
-                    <h1 class="mt-4">Real‑Time Detection</h1>
+                    <h1 class="mt-4">Real-Time Detection</h1>
                     <ol class="breadcrumb mb-4">
-                        <li class="breadcrumb-item">
-                            <a href="{{ url_for('index') }}">Home</a>
-                        </li>
-                        <li class="breadcrumb-item active">Live Detection</li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                        <li class="breadcrumb-item active">Live Detection</li>
                     </ol>
-                    <!-- Card containing the video stream -->
+
+                    <!-- Stats row -->
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card bg-light mb-4">
+                                <div class="card-header">
+                                    <i class="fas fa-tachometer-alt me-1"></i> Stream Stats
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Resolution</span>
+                                        <strong id="stat-res">-</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>FPS</span>
+                                        <strong id="stat-fps">-</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Frame Index</span>
+                                        <strong id="stat-frame">-</strong>
+                                    </div>
+                                </div>
+                                <div class="card-footer small text-muted">
+                                    Updates every 0.5s
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Video card -->
                     <div class="card mb-4">
                         <div class="card-header">
-                            <i class="fas fa-video me-1"></i>
-                            Webcam Feed
+                            <i class="fas fa-video me-1"></i> Webcam Feed
                         </div>
                         <div class="card-body text-center">
-                            <!-- The video feed image is responsive and capped at a reasonable height -->
                             <img
                                 src="{{ url_for('video_feed') }}"
                                 alt="Webcam feed"
                                 class="img-fluid"
-                                style="max-height: 500px; border: 1px solid #dee2e6; border-radius: 0.25rem;"
+                                style="max-height: 600px; border: 1px solid #dee2e6; border-radius: 0.25rem;"
                             />
                         </div>
-
                     </div>
                 </div>
             </main>
-            <!-- Footer -->
+
             <footer class="py-4 bg-light mt-auto">
                 <div class="container-fluid px-4">
                     <div class="d-flex align-items-center justify-content-between small">
+                        <div class="text-muted"></div>
                     </div>
                 </div>
             </footer>
         </div>
     </div>
 
-    <!-- JavaScript dependencies -->
+    <!-- JS -->
     <script
         src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"
     ></script>
-    <!-- SB Admin helper script (handles sidebar toggling) -->
-    <script
-        src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"
-    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"></script>
+    <script>
+        async function pollStats() {
+            try {
+                const res = await fetch("/api/stream_stats", { cache: "no-store" });
+                const s = await res.json();
+                document.getElementById("stat-res").textContent   = s.resolution ?? "-";
+                document.getElementById("stat-fps").textContent   = (s.fps ?? 0).toString();
+                document.getElementById("stat-frame").textContent = (s.frame_index ?? 0).toString();
+            } catch (e) {
+                // 네트워크/초기화 중일 수 있음
+            }
+        }
+        // 최초 1회 즉시 호출 후 주기 폴링
+        pollStats();
+        setInterval(pollStats, 500);
+    </script>
 </body>
 </html>
