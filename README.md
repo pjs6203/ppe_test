@@ -1,7 +1,7 @@
 # PPE_TEST
 
 ## 0. 참고사항
-본 프로그램은 다음과 같은 시스템에서 실행되었습니다. 
+본 프로그램은 다음 시스템에서 실행되었습니다. 
 ```
 OS Microsoft Windows 11 Pro
 CPU AMD Ryzen 7 7800X3D 8-Core Processor
@@ -42,3 +42,21 @@ git clone https://github.com/pjs6203/ppe_test.git
 cd ppe_test
 python app.py
 ```
+
+## License
+
+This project is licensed under the **AGPL-3.0**.  
+See the [LICENSE](./LICENSE) file for details.
+
+### Third-Party Notices
+- **Ultralytics YOLO** — AGPL-3.0  
+  Used as the inference/training framework.
+- **Start Bootstrap – SB Admin** — MIT  
+  Template assets included/modified; MIT notice retained.
+- **PPE_detection_YOLO (Vinayakmane47)** — MIT  
+  Referenced for structure/implementation ideas; MIT notice retained as applicable.
+- **Datasets** — *(if used)*  
+  - Example: Construction Site Safety (Roboflow Universe) — **CC BY 4.0** (include author & link)
+
+> If you distribute or provide this project over a network, ensure compliance with **AGPL-3.0**,
+> including making the complete corresponding source code available to users.
