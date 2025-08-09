@@ -60,3 +60,4 @@ See the [LICENSE](./LICENSE) file for details.
 
 > If you distribute or provide this project over a network, ensure compliance with **AGPL-3.0**,
 > including making the complete corresponding source code available to users.
+ 

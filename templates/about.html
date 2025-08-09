@@ -6,15 +6,25 @@
   <title>About · System Information</title>
   <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.min.css" rel="stylesheet"/>
   <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
-  <!-- head 끝부분에 추가 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .mini-badge{font-size:.85rem;padding:.15rem .5rem;border-radius:.5rem;background:rgba(33,37,41,.85);color:#fff}
+    .chart-wrap{height:200px}
+  </style>
 </head>
 <body class="sb-nav-fixed">
   <!-- Topbar -->
   <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
     <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
     <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle"><i class="fas fa-bars"></i></button>
-    <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4"></ul>
+    <ul class="navbar-nav ms-auto me-3 me-lg-4">
+      <li class="nav-item d-none d-lg-block my-auto">
+        <span class="mini-badge me-2"><i class="fa-solid fa-microchip me-1"></i><span id="top_cpu">--%</span></span>
+      </li>
+      <li class="nav-item d-none d-lg-block my-auto">
+        <span class="mini-badge"><i class="fa-solid fa-memory me-1"></i><span id="top_mem">--%</span></span>
+      </li>
+    </ul>
   </nav>
 
   <div id="layoutSidenav">
@@ -74,36 +84,49 @@
             </div>
           </div>
 
-          <!-- Usage (Live) -->
+          <!-- Live Usage -->
           <div class="card mb-4">
             <div class="card-header">
               <i class="fas fa-gauge-high me-1"></i> Usage (Live)
             </div>
             <div class="card-body">
-              <div class="mb-3">
-                <div class="d-flex justify-content-between">
-                  <span>CPU</span><span id="cpu_label">--%</span>
+              <div class="row">
+                <div class="col-lg-4 mb-4">
+                  <div class="d-flex justify-content-between">
+                    <span>CPU</span><span id="cpu_label">--%</span>
+                  </div>
+                  <div class="progress mb-2"><div id="cpu_bar" class="progress-bar" style="width:0%"></div></div>
+                  <div class="chart-wrap"><canvas id="cpu_chart"></canvas></div>
                 </div>
-                <div class="progress"><div id="cpu_bar" class="progress-bar" style="width:0%"></div></div>
-              </div>
-
-              <div class="mb-3">
-                <div class="d-flex justify-content-between">
-                  <span>Memory</span><span id="mem_label">--%</span>
+                <div class="col-lg-4 mb-4">
+                  <div class="d-flex justify-content-between">
+                    <span>Memory</span><span id="mem_label">--%</span>
+                  </div>
+                  <div class="progress mb-2"><div id="mem_bar" class="progress-bar" style="width:0%"></div></div>
+                  <small class="text-muted" id="mem_detail">-- / --</small>
+                  <div class="chart-wrap mt-2"><canvas id="mem_chart"></canvas></div>
                 </div>
-                <div class="progress"><div id="mem_bar" class="progress-bar" style="width:0%"></div></div>
-                <small class="text-muted" id="mem_detail">-- / --</small>
+                <div class="col-lg-4 mb-4">
+                  <div class="d-flex justify-content-between">
+                    <span>GPU VRAM</span><span id="gpu_label">--%</span>
+                  </div>
+                  <div class="progress mb-2"><div id="gpu_bar" class="progress-bar bg-success" style="width:0%"></div></div>
+                  <small class="text-muted d-block" id="gpu_detail">No CUDA GPU detected.</small>
+                  <div class="chart-wrap mt-2"><canvas id="gpu_chart"></canvas></div>
+                  <!-- NEW: GPU Load (SM Util) -->
+                  <div class="d-flex justify-content-between mt-3">
+                    <span>GPU Load (SM)</span><span id="gpu_sm_label">--%</span>
+                  </div>
+                  <div class="chart-wrap mt-2"><canvas id="gpu_sm_chart"></canvas></div>
+                </div>
               </div>
-
-              <!-- GPU 카드들이 들어갈 컨테이너 -->
               <div id="gpu_container"></div>
             </div>
           </div>
         </div>
       </main>
-
       <footer class="py-4 bg-light mt-auto">
-        <div class="container-fluid px-4"><div class="d-flex align-items-center justify-content-between small"></div></div>
+        <div class="container-fluid px-4"></div>
       </footer>
     </div>
   </div>
@@ -111,13 +134,79 @@
   <!-- JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"></script>
-
   <script>
+    // ---------- Persist state in localStorage ----------
+    const STORAGE_KEY = 'yd_metrics_v2';   // v2: add gpu_sm
+    const WINDOW_SEC  = 300;               // keep last 5 minutes
+    const MAX_POINTS  = 300;               // 1s interval -> 300 points
+
+    function nowSec(){ return Math.floor(Date.now()/1000); }
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return null;
+        const s = JSON.parse(raw);
+        if(!s || !Array.isArray(s.ts) || !Array.isArray(s.cpu) || !Array.isArray(s.mem) || !Array.isArray(s.gpu) || !Array.isArray(s.gpu_sm)) return null;
+        return s;
+      }catch{ return null; }
+    }
+    function saveState(state){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+    }
+    function trimState(state){
+      const cutoff = nowSec() - WINDOW_SEC;
+      while(state.ts.length && state.ts[0] < cutoff){
+        state.ts.shift(); state.cpu.shift(); state.mem.shift(); state.gpu.shift(); state.gpu_sm.shift();
+      }
+      if(state.ts.length > MAX_POINTS){
+        const drop = state.ts.length - MAX_POINTS;
+        state.ts.splice(0, drop);
+        state.cpu.splice(0, drop);
+        state.mem.splice(0, drop);
+        state.gpu.splice(0, drop);
+        state.gpu_sm.splice(0, drop);
+      }
+    }
+    function initState(){
+      const s = loadState() || { ts:[], cpu:[], mem:[], gpu:[], gpu_sm:[] };
+      trimState(s);
+      return s;
+    }
+
     function humanBytes(n){
       if (n === null || n === undefined) return 'N/A';
       const units = ['B','KB','MB','GB','TB']; let i=0; let v = n;
       while (v >= 1024 && i < units.length-1){ v/=1024; i++; }
       return v.toFixed(1)+' '+units[i];
+    }
+
+    function lineConfig(label, initData){
+      const n = Math.max(30, initData.length || 0);
+      const padded = Array(Math.max(0, n - initData.length)).fill(0).concat(initData);
+      return {
+        type: 'line',
+        data: { labels: Array(n).fill(''), datasets: [{ label, data: padded }] },
+        options: { animation:false, responsive:true, maintainAspectRatio:false,
+          scales:{ y:{ min:0, max:100, ticks:{ stepSize:25 }}, x:{ display:false } },
+          plugins:{ legend:{ display:false } }
+        }
+      };
+    }
+
+    const state = initState();
+
+    const cpuChart   = new Chart(document.getElementById('cpu_chart'),   lineConfig('CPU',   state.cpu));
+    const memChart   = new Chart(document.getElementById('mem_chart'),   lineConfig('MEM',   state.mem));
+    const gpuChart   = new Chart(document.getElementById('gpu_chart'),   lineConfig('GPU',   state.gpu));     // VRAM %
+    const gpuSmChart = new Chart(document.getElementById('gpu_sm_chart'),lineConfig('GPU-SM',state.gpu_sm));  // SM Util %
+
+    function pushChart(chart, v, targetArray){
+      const arr = chart.data.datasets[0].data;
+      arr.push(v ?? 0);
+      arr.shift();
+      chart.update('none');           // no animation
+      targetArray.push(v ?? 0);
     }
 
     function renderGPUs(gpus){
@@ -154,13 +243,18 @@
 
     async function refresh(){
       try {
-        const r = await fetch('{{ url_for("api_system_metrics") }}');
+        const r = await fetch('{{ url_for("api_system_metrics") }}', { cache:'no-store'});
         const d = await r.json();
+
+        // Top badges
+        document.getElementById('top_cpu').textContent = (d.cpu_percent ?? 0) + '%';
+        document.getElementById('top_mem').textContent = (d.mem_percent ?? 0).toFixed(1) + '%';
 
         // CPU
         const cpuPct = (d.cpu_percent ?? 0);
         document.getElementById('cpu_label').textContent = cpuPct + '%';
         document.getElementById('cpu_bar').style.width = cpuPct + '%';
+        pushChart(cpuChart, cpuPct, state.cpu);
 
         // Memory
         const memPct = (d.mem_percent ?? 0);
@@ -168,15 +262,58 @@
         document.getElementById('mem_bar').style.width = memPct + '%';
         document.getElementById('mem_detail').textContent =
           humanBytes(d.mem_used) + ' / ' + humanBytes(d.mem_total);
+        pushChart(memChart, memPct, state.mem);
 
-        // GPUs
+        // GPUs (first GPU summary)
+        let firstVramPct = 0, firstSm = 0, detail = 'No CUDA GPU detected.';
+        if (d.gpus && d.gpus.length){
+          const g0 = d.gpus[0];
+          firstVramPct = g0.vram_percent ?? 0;
+          firstSm = g0.sm_util ?? 0;
+          detail = `GPU ${g0.index}: ${g0.name} — ${humanBytes(g0.vram_used)} / ${humanBytes(g0.vram_total)} (${firstVramPct}%)`;
+        }
+        // VRAM %
+        document.getElementById('gpu_label').textContent = (firstVramPct||0) + '%';
+        document.getElementById('gpu_bar').style.width = (firstVramPct||0) + '%';
+        document.getElementById('gpu_detail').textContent = detail;
+        pushChart(gpuChart, firstVramPct||0, state.gpu);
+        // SM Util %
+        document.getElementById('gpu_sm_label').textContent = (firstSm||0) + '%';
+        pushChart(gpuSmChart, firstSm||0, state.gpu_sm);
+
         renderGPUs(d.gpus);
+
+        // Persist every 2s
+        state.ts.push(nowSec());
+        trimState(state);
+        if(!refresh._lastSave || (Date.now() - refresh._lastSave) > 2000){
+          saveState(state);
+          refresh._lastSave = Date.now();
+        }
       } catch(e) {
         console.error(e);
       }
     }
     refresh();
-    setInterval(refresh, 1000); // 1초마다 갱신
+    setInterval(refresh, 1000);
+
+    // Sync when another tab updates the same key
+    window.addEventListener('storage', (ev)=>{
+      if(ev.key !== STORAGE_KEY) return;
+      const s2 = loadState(); if(!s2) return;
+      state.ts = s2.ts; state.cpu = s2.cpu; state.mem = s2.mem; state.gpu = s2.gpu; state.gpu_sm = s2.gpu_sm;
+      const sync = (chart, arr)=>{
+        const n = chart.data.datasets[0].data.length;
+        const tail = arr.slice(-n);
+        const padded = Array(Math.max(0, n - tail.length)).fill(0).concat(tail);
+        chart.data.datasets[0].data = padded;
+        chart.update('none');
+      };
+      sync(cpuChart, state.cpu);
+      sync(memChart, state.mem);
+      sync(gpuChart, state.gpu);
+      sync(gpuSmChart, state.gpu_sm);
+    });
   </script>
 </body>
 </html>
