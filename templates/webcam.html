@@ -744,11 +744,6 @@
         // PPE 상태 업데이트
         updatePPEGrid(p);
         
-        // 위반 알림
-        if (p.status_code === 'violation' && p.has_person) {
-          showAlert(`안전 위반: ${p.status_text}`);
-        }
-
       } catch (error) {
         console.error("통계 폴링 실패:", error);
       }

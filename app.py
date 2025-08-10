@@ -30,7 +30,7 @@ import traceback
 WEIGHTS_DIR = "./weights"
 DEFAULT_MODEL = os.getenv("MODEL_PATH", "").strip() or None  # 우선순위: 환경변수 > 첫 번째 pt
 CAM_INDEX = int(os.getenv("CAM_INDEX", "0"))
-TARGET_W, TARGET_H = 1280, 720
+TARGET_W, TARGET_H = 1920, 1080
 TARGET_FPS = 60
 FLIP_LR = True
 INFER_EVERY = int(os.getenv("INFER_EVERY", "1"))
