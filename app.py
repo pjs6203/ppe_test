@@ -107,6 +107,69 @@ def get_system_versions():
         cv_v = None
 
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # OS / CPU 정보
+    try:
+        os_name = platform.system()
+        os_release = platform.release()
+        os_version = platform.version()
+        os_string = f"{os_name} {os_release}"
+        # Windows의 경우: 빌드 번호로 10/11 판별 후 EditionID로 에디션 보정
+        if os_name == "Windows":
+            try:
+                import sys
+                build = sys.getwindowsversion().build  # type: ignore[attr-defined]
+                base_name = "Windows 11" if build >= 22000 else "Windows 10"
+                edition_readable = None
+                try:
+                    import winreg  # type: ignore
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") as k:
+                        edition_id, _ = winreg.QueryValueEx(k, "EditionID")
+                    # 간단한 매핑 (필요시 확장)
+                    mapping = {
+                        "Professional": "Pro",
+                        "Core": "Home",
+                        "Enterprise": "Enterprise",
+                        "Education": "Education",
+                        "ProfessionalWorkstation": "Pro for Workstations",
+                        "ServerStandard": "Server Standard",
+                    }
+                    edition_readable = mapping.get(str(edition_id), str(edition_id)) if edition_id else None
+                except Exception:
+                    edition_readable = None
+                os_string = f"{base_name} {edition_readable}".strip()
+            except Exception:
+                # 최후 수단: ProductName 사용
+                try:
+                    import winreg  # type: ignore
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") as k:
+                        product, _ = winreg.QueryValueEx(k, "ProductName")
+                    os_string = product
+                except Exception:
+                    pass
+    except Exception:
+        os_name = None; os_release = None; os_version = None; os_string = None
+
+    try:
+        cpu_name = None
+        # Windows에서 정확한 CPU 이름을 레지스트리로 조회
+        if os_name == "Windows":
+            try:
+                import winreg  # type: ignore
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0") as k:
+                    cpu_name, _ = winreg.QueryValueEx(k, "ProcessorNameString")
+            except Exception:
+                cpu_name = None
+        if not cpu_name:
+            cpu_name = platform.processor() or None
+        if not cpu_name:
+            try:
+                import cpuinfo  # type: ignore
+                cpu_name = cpuinfo.get_cpu_info().get("brand_raw")
+            except Exception:
+                cpu_name = None
+    except Exception:
+        cpu_name = None
     gpus = []
     if device_name == "cuda":
         try:
@@ -116,8 +179,21 @@ def get_system_versions():
             pass
 
     return {
-        "python": py, "torch": torch_v, "cuda": cuda_v, "cudnn": cudnn_v,
-        "ultralytics": ul_v, "opencv": cv_v, "device": device_name, "gpus": gpus,
+        "python": py,
+        "torch": torch_v,
+        "cuda": cuda_v,
+        "cudnn": cudnn_v,
+        "ultralytics": ul_v,
+        "opencv": cv_v,
+        "device": device_name,
+        "gpus": gpus,
+        # 추가 시스템/하드웨어 정보
+        "os": os_string,
+        "os_version": os_version,
+        "cpu": cpu_name,
+        # 코어 수는 화면 요구사항상 표시하지 않지만 보조 정보로 유지하려면 아래 주석 해제
+        # "cpu_cores_physical": psutil.cpu_count(logical=False),
+        # "cpu_cores_logical": psutil.cpu_count(logical=True),
     }
 
 def _try_nvml_usage():

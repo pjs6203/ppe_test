@@ -466,8 +466,8 @@
            </div>
          </div>
          
-         <!-- Left Column -->
-         <div class="col-lg-8">
+         <!-- Single Column (Full Width) -->
+         <div class="col-12">
            <!-- System Versions -->
            <div class="card">
              <div class="card-header">
@@ -477,8 +477,8 @@
                </h5>
              </div>
             <div class="card-body">
-              <div class="row">
-                <div class="col-md-6">
+              <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
                   <h6 class="section-title mb-3">기본 환경</h6>
                   <table class="table table-borderless">
                     <tbody>
@@ -501,7 +501,7 @@
                     </tbody>
                   </table>
                 </div>
-                <div class="col-md-6">
+                <div class="col-lg-4 col-md-6">
                   <h6 class="section-title mb-3">GPU 환경</h6>
                   <table class="table table-borderless">
                     <tbody>
@@ -524,136 +524,36 @@
                     </tbody>
                   </table>
                 </div>
+                <div class="col-lg-4 col-md-12">
+                  <h6 class="section-title mb-3">시스템 정보</h6>
+                  <table class="table table-borderless">
+                    <tbody>
+                      <tr>
+                        <td><i class="fas fa-desktop me-2" style="color: #38bdf8;"></i>플랫폼</td>
+                        <td>
+                          <span class="version-badge">{{ (versions.os or versions.device|upper) }}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-microchip me-2" style="color: #ef4444;"></i>CPU</td>
+                        <td><span class="version-badge">{{ versions.cpu or 'N/A' }}</span></td>
+                      </tr>
+                      {% if versions.gpus and versions.gpus|length > 0 %}
+                      <tr>
+                        <td><i class="fas fa-video me-2" style="color: #22c55e;"></i>GPU</td>
+                        <td><span class="version-badge">{{ versions.gpus[0] }}</span></td>
+                      </tr>
+                      {% endif %}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
-
-          <!-- GPU Information -->
-          {% if versions.gpus %}
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-microchip me-2"></i>
-                GPU 정보
-              </h5>
-            </div>
-            <div class="card-body">
-              {% for gpu in versions.gpus %}
-              <div class="gpu-card">
-                <div class="gpu-header">
-                  <div class="gpu-name">{{ gpu }}</div>
-                  <div class="gpu-util">GPU #{{ loop.index0 }}</div>
-                </div>
-                <div class="gpu-memory">
-                  <div class="d-flex justify-content-between small text-muted">
-                    <span>VRAM</span>
-                    <span id="gpu-{{ loop.index0 }}-mem">--</span>
-                  </div>
-                  <div class="memory-bar">
-                    <div class="memory-used" id="gpu-{{ loop.index0 }}-bar" style="width: 0%"></div>
-                  </div>
-                </div>
-              </div>
-              {% endfor %}
-            </div>
-          </div>
-          {% endif %}
-
           
         </div>
 
-        <!-- Right Column -->
-        <div class="col-lg-4">
-          <!-- System Status -->
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-heartbeat me-2"></i>
-                시스템 상태
-              </h5>
-            </div>
-                         <div class="card-body">
-               <div class="d-flex align-items-center mb-3">
-                 <span class="status-indicator online"></span>
-                 <span class="ms-2 status-text">시스템 정상</span>
-               </div>
-               <div class="d-flex align-items-center mb-3">
-                 <span class="status-indicator online"></span>
-                 <span class="ms-2 status-text">웹캠 연결됨</span>
-               </div>
-               <div class="d-flex align-items-center mb-3">
-                 <span class="status-indicator online"></span>
-                 <span class="ms-2 status-text">AI 모델 로드됨</span>
-               </div>
-               <div class="d-flex align-items-center">
-                 <span class="status-indicator online"></span>
-                 <span class="ms-2 status-text">데이터베이스 연결됨</span>
-               </div>
-             </div>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-tools me-2"></i>
-                빠른 작업
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="d-grid gap-2">
-                <a href="{{ url_for('webcam_page') }}" class="btn btn-primary">
-                  <i class="fas fa-video me-2"></i>
-                  실시간 감지 시작
-                </a>
-                <a href="/snapshot.jpg" target="_blank" class="btn btn-outline-primary">
-                  <i class="fas fa-camera me-2"></i>
-                  스냅샷 촬영
-                </a>
-                <button class="btn btn-outline-secondary" onclick="location.reload()">
-                  <i class="fas fa-sync-alt me-2"></i>
-                  페이지 새로고침
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- System Info -->
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">
-                <i class="fas fa-info-circle me-2"></i>
-                시스템 정보
-              </h5>
-            </div>
-            <div class="card-body">
-              <div class="small text-muted">
-                <div class="mb-2">
-                  <strong>플랫폼:</strong> {{ versions.device.upper() }}
-                </div>
-                <div class="mb-2">
-                  <strong>GPU:</strong> 
-                  {% if versions.gpus %}
-                    {{ versions.gpus|length }}개 감지됨
-                  {% else %}
-                    GPU 없음 (CPU 모드)
-                  {% endif %}
-                </div>
-                <div class="mb-2">
-                  <strong>CUDA:</strong> 
-                  {% if versions.cuda %}
-                    지원됨 ({{ versions.cuda }})
-                  {% else %}
-                    지원되지 않음
-                  {% endif %}
-                </div>
-                <div>
-                  <strong>업데이트:</strong> 실시간
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        
       </div>
     </div>
   </div>
