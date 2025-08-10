@@ -1,198 +1,710 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>YOLO Real-Time Detection</title>
-  <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.min.css" rel="stylesheet"/>
-  <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+  <title>PPE 안전장비 실시간 감지 시스템</title>
+  
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
   <style>
-    .video-wrap{position:relative;display:inline-block}
-    .hud{position:absolute;right:.5rem;top:.5rem;background:rgba(33,37,41,.7);color:#fff;padding:.35rem .5rem;border-radius:.5rem;font-size:.9rem}
-    .hud small{opacity:.8}
-    .status-dot{width:.6rem;height:.6rem;border-radius:50%;display:inline-block;margin-right:.35rem;background:#adb5bd}
-    .status-dot.on{background:#51cf66}
-    .status-dot.err{background:#fa5252}
-    .status-dot.warn{background:#fab005}
-    .skeleton{width:100%;min-height:240px;background:repeating-linear-gradient( -45deg, #f1f3f5, #f1f3f5 10px, #e9ecef 10px, #e9ecef 20px)}
-    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+    :root {
+      --primary-color: #3b82f6;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --danger-color: #ef4444;
+      --dark-bg: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #475569;
+      --text-primary: #ffffff;
+      --text-secondary: #e2e8f0;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-weight: 400;
+      line-height: 1.6;
+    }
+
+    .navbar {
+      background: rgba(15, 23, 42, 0.98) !important;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--primary-color) !important;
+    }
+
+    .main-container {
+      padding: 2rem 0;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+
+    .card-header {
+      background: rgba(30, 41, 59, 0.9);
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 16px 16px 0 0 !important;
+      padding: 1.5rem;
+    }
+
+    .card-header h5 {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+
+    .status-card {
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .status-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .status-card.active::before {
+      opacity: 1;
+    }
+
+    .video-container {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .video-feed {
+      width: 100%;
+      max-height: 70vh;
+      border-radius: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .hud-overlay {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .hud-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .hud-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .status-indicator {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text-secondary);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .status-indicator.online {
+      background: var(--success-color);
+      box-shadow: 0 0 10px var(--success-color);
+    }
+
+    .status-indicator.warning {
+      background: var(--warning-color);
+      box-shadow: 0 0 10px var(--warning-color);
+    }
+
+    .status-indicator.error {
+      background: var(--danger-color);
+      box-shadow: 0 0 10px var(--danger-color);
+    }
+
+    .ppe-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .ppe-item {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .ppe-item.safe {
+      border-color: var(--success-color);
+      background: rgba(16, 185, 129, 0.15);
+    }
+
+    .ppe-item.violation {
+      border-color: var(--danger-color);
+      background: rgba(239, 68, 68, 0.15);
+      animation: pulse 2s infinite;
+    }
+
+    .ppe-item.warning {
+      border-color: var(--warning-color);
+      background: rgba(245, 158, 11, 0.15);
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .ppe-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .ppe-item.safe .ppe-icon {
+      color: var(--success-color);
+    }
+
+    .ppe-item.violation .ppe-icon {
+      color: var(--danger-color);
+    }
+
+    .ppe-item.warning .ppe-icon {
+      color: var(--warning-color);
+    }
+
+    .ppe-item .small {
+      color: var(--text-primary);
+      font-weight: 500;
+      font-size: 0.85rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat-item {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--primary-color);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+      font-weight: 500;
+    }
+
+    .model-selector {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .model-selector:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .alert-custom {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid var(--danger-color);
+      border-radius: 12px;
+      color: var(--text-primary);
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: var(--primary-color);
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .skeleton {
+      width: 100%;
+      min-height: 400px;
+      background: linear-gradient(90deg, 
+        rgba(30, 41, 59, 0.5) 25%, 
+        rgba(71, 85, 105, 0.5) 50%, 
+        rgba(30, 41, 59, 0.5) 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+      border-radius: 16px;
+    }
+
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* 텍스트 가독성 개선 */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .text-muted {
+      color: var(--text-muted) !important;
+    }
+
+    .small {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* 상태 텍스트 강조 */
+    #ppe-overall-text {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text-primary);
+    }
+
+    /* 모델 힌트 텍스트 개선 */
+    #model-hint {
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .main-container {
+        padding: 1rem 0;
+      }
+      
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .ppe-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .hud-overlay {
+        position: relative;
+        top: auto;
+        right: auto;
+        margin-top: 1rem;
+      }
+    }
   </style>
 </head>
-<body class="sb-nav-fixed">
-  <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-    <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
-    <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle"><i class="fas fa-bars"></i></button>
-    <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4"></ul>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="fas fa-shield-alt me-2"></i>
+        PPE 안전장비 감지 시스템
+      </a>
+             <div class="navbar-nav ms-auto">
+         <a class="nav-link active" href="{{ url_for('webcam_page') }}">
+           <i class="fas fa-video me-1"></i>
+           실시간 감지
+         </a>
+         <a class="nav-link" href="{{ url_for('about') }}">
+           <i class="fas fa-info-circle me-1"></i>
+           시스템 정보
+         </a>
+       </div>
+    </div>
   </nav>
 
-  <div id="layoutSidenav">
-    <div id="layoutSidenav_nav">
-      <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-        <div class="sb-sidenav-menu">
-          <div class="nav">
-            <div class="sb-sidenav-menu-heading">Navigation</div>
-            <a class="nav-link active" href="{{ url_for('webcam_page') }}">
-              <div class="sb-nav-link-icon"><i class="fas fa-video"></i></div>
-              Live Detection
-            </a>
-            <a class="nav-link" href="{{ url_for('about') }}">
-              <div class="sb-nav-link-icon"><i class="fas fa-info-circle"></i></div>
-              About
-            </a>
-          </div>
+  <div class="main-container">
+    <div class="container-fluid">
+      <!-- Header -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <h1 class="h2 mb-2">
+            <i class="fas fa-video me-2"></i>
+            실시간 안전장비 감지
+          </h1>
+          <p class="text-muted">웹캠을 통한 실시간 PPE(개인보호장비) 감지 및 모니터링</p>
         </div>
-      </nav>
-    </div>
+      </div>
 
-    <div id="layoutSidenav_content">
-      <main>
-        <div class="container-fluid px-4">
-          <h1 class="mt-4">Real-Time Detection</h1>
-          <ol class="breadcrumb mb-4">
-            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-            <li class="breadcrumb-item active">Live Detection</li>
-          </ol>
-
-          <div class="row">
-            <div class="col-md-5">
-              <div class="card bg-light mb-4">
-                <div class="card-header d-flex align-items-center justify-content-between">
-                  <span><i class="fas fa-tachometer-alt me-1"></i> Stream Stats</span>
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="small text-muted me-2">Model</span>
-                    <select id="model-select" class="form-select form-select-sm mono" style="min-width:220px"></select>
-                  </div>
+      <div class="row">
+        <!-- Left Column - Stats & Controls -->
+        <div class="col-lg-4 col-md-5 mb-4">
+          <!-- System Status Card -->
+          <div class="card status-card active mb-4">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-tachometer-alt me-2"></i>
+                시스템 상태
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-fps">-</div>
+                  <div class="stat-label">FPS</div>
                 </div>
-                <div class="card-body">
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Status</span>
-                    <span><span id="status-dot" class="status-dot"></span><strong id="stat-status">INIT</strong></span>
-                  </div>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Resolution</span><strong id="stat-res">-</strong>
-                  </div>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>FPS</span><strong id="stat-fps">-</strong>
-                  </div>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Frame Index</span><strong id="stat-frame">-</strong>
-                  </div>
-                  <hr/>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span>Person</span>
-                    <span><span id="person-dot" class="status-dot"></span><strong id="person-status">UNKNOWN</strong></span>
-                  </div>
-                  <div class="d-flex justify-content-between">
-                    <span>PPE Status</span>
-                    <span><span id="ppe-dot" class="status-dot"></span><strong id="ppe-status">UNKNOWN</strong></span>
-                  </div>
-                  <div class="mt-3 small text-muted" id="model-hint"></div>
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-res">-</div>
+                  <div class="stat-label">해상도</div>
                 </div>
-                <div class="card-footer small text-muted">
-                  Updates every 0.5s
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-status">초기화</div>
+                  <div class="stat-label">상태</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value" id="stat-frame">-</div>
+                  <div class="stat-label">프레임</div>
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- Model Selection Card -->
           <div class="card mb-4">
             <div class="card-header">
-              <i class="fas fa-video me-1"></i> Webcam Feed
+              <h5 class="mb-0">
+                <i class="fas fa-brain me-2"></i>
+                AI 모델 선택
+              </h5>
             </div>
-            <div class="card-body text-center">
-              <div class="video-wrap">
-                <img id="video" src="{{ url_for('video_feed') }}" alt="Webcam feed"
-                     class="img-fluid" style="max-height:65vh;border:1px solid #dee2e6;border-radius:.25rem;"/>
-                <div class="hud" id="hud" hidden>
-                  <div><small>RES</small> <span id="hud-res">-</span></div>
-                  <div><small>FPS</small> <span id="hud-fps">-</span></div>
+            <div class="card-body">
+              <select id="model-select" class="form-select model-selector mb-3">
+                <option value="">모델 로딩 중...</option>
+              </select>
+              <div class="small text-muted" id="model-hint">모델을 선택하세요</div>
+            </div>
+          </div>
+
+          <!-- PPE Status Card -->
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-hard-hat me-2"></i>
+                안전장비 상태
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="d-flex align-items-center mb-3">
+                <span class="status-indicator" id="ppe-overall-status"></span>
+                <span class="ms-2" id="ppe-overall-text">감지 대기 중</span>
+              </div>
+              
+              <div class="ppe-grid" id="ppe-grid">
+                <div class="ppe-item">
+                  <div class="ppe-icon">
+                    <i class="fas fa-hard-hat"></i>
+                  </div>
+                  <div class="small">헬멧</div>
+                </div>
+                <div class="ppe-item">
+                  <div class="ppe-icon">
+                    <i class="fas fa-tshirt"></i>
+                  </div>
+                  <div class="small">조끼</div>
+                </div>
+                <div class="ppe-item">
+                  <div class="ppe-icon">
+                    <i class="fas fa-mask"></i>
+                  </div>
+                  <div class="small">마스크</div>
+                </div>
+                <div class="ppe-item">
+                  <div class="ppe-icon">
+                    <i class="fas fa-user"></i>
+                  </div>
+                  <div class="small">작업자</div>
                 </div>
               </div>
-              <div id="skeleton" class="skeleton mt-3 d-none"></div>
-              <div class="mt-3">
-                <a class="btn btn-outline-secondary btn-sm" href="/snapshot.jpg" target="_blank">
-                  <i class="fa-solid fa-camera me-1"></i> Snapshot
-                </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column - Video Feed -->
+        <div class="col-lg-8 col-md-7">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">
+                <i class="fas fa-video me-2"></i>
+                실시간 영상
+              </h5>
+              <a class="btn btn-primary btn-sm" href="/snapshot.jpg" target="_blank">
+                <i class="fas fa-camera me-1"></i>
+                스냅샷
+              </a>
+            </div>
+            <div class="card-body p-0">
+              <div class="video-container">
+                <img id="video" src="{{ url_for('video_feed') }}" alt="실시간 영상" class="video-feed" />
+                <div class="hud-overlay" id="hud" hidden>
+                  <div class="hud-item">
+                    <i class="fas fa-expand-arrows-alt"></i>
+                    <span id="hud-res">-</span>
+                  </div>
+                  <div class="hud-item">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span id="hud-fps">-</span> FPS
+                  </div>
+                </div>
+              </div>
+              <div id="skeleton" class="skeleton d-none"></div>
+            </div>
+          </div>
+
+          <!-- Alert Section -->
+          <div id="alert-section" class="mt-4" style="display: none;">
+            <div class="alert-custom">
+              <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <div>
+                  <strong>안전 위반 감지!</strong>
+                  <div id="alert-message">필수 안전장비가 착용되지 않았습니다.</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </main>
-      <footer class="py-4 bg-light mt-auto">
-        <div class="container-fluid px-4">
-          <div class="d-flex align-items-center justify-content-between small">
-            <div class="text-muted"></div>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"></script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
     let lastOkTs = 0;
     const LS_KEY_MODEL = "yd_selected_model";
-    function basename(p){ return p ? p.split(/[\\/]/).pop() : p; }
+    
+    function basename(p) { 
+      return p ? p.split(/[\\/]/).pop() : p; 
+    }
 
-    function setSelectToPath(sel, targetPath){
-      if(!targetPath) return false;
+    function setSelectToPath(sel, targetPath) {
+      if (!targetPath) return false;
       sel.value = targetPath;
-      if(sel.value === targetPath) return true;
+      if (sel.value === targetPath) return true;
       const tb = basename(targetPath);
-      for(const opt of sel.options){
-        if(basename(opt.value) === tb){ sel.value = opt.value; return true; }
+      for (const opt of sel.options) {
+        if (basename(opt.value) === tb) { 
+          sel.value = opt.value; 
+          return true; 
+        }
       }
       return false;
     }
 
-    async function loadModels(){
-      const r = await fetch("/api/models", {cache:"no-store"});
-      const d = await r.json();
-      const sel = document.getElementById("model-select");
-      sel.innerHTML = "";
-      (d.files || []).forEach(fp => {
-        const opt = document.createElement("option");
-        opt.value = fp;
-        opt.textContent = basename(fp);
-        sel.appendChild(opt);
-      });
-      const pref = localStorage.getItem(LS_KEY_MODEL);
-      if(!setSelectToPath(sel, pref) && !setSelectToPath(sel, d.requested) && !setSelectToPath(sel, d.loaded)){
-        if(sel.options.length) sel.selectedIndex = 0;
+    async function loadModels() {
+      try {
+        const r = await fetch("/api/models", { cache: "no-store" });
+        const d = await r.json();
+        const sel = document.getElementById("model-select");
+        sel.innerHTML = "";
+        
+        (d.files || []).forEach(fp => {
+          const opt = document.createElement("option");
+          opt.value = fp;
+          opt.textContent = basename(fp);
+          sel.appendChild(opt);
+        });
+        
+        const pref = localStorage.getItem(LS_KEY_MODEL);
+        if (!setSelectToPath(sel, pref) && !setSelectToPath(sel, d.requested) && !setSelectToPath(sel, d.loaded)) {
+          if (sel.options.length) sel.selectedIndex = 0;
+        }
+        updateModelHint(d);
+      } catch (error) {
+        console.error("모델 로딩 실패:", error);
       }
-      updateModelHint(d);
     }
 
-    function updateModelHint(d){
+    function updateModelHint(d) {
       const hint = document.getElementById("model-hint");
       const rq = d.requested ? basename(d.requested) : "-";
       const ld = d.loaded ? basename(d.loaded) : "-";
-      const err = d.error ? ` (last error: ${d.error})` : "";
+      const err = d.error ? ` (오류: ${d.error})` : "";
       const same = (d.requested && d.loaded && d.requested === d.loaded);
-      hint.textContent = same
-        ? `Loaded model: ${ld}`
-        : `Switching... requested: ${rq}, loading: ${ld}${err}`;
+      
+      if (same) {
+        hint.innerHTML = `<i class="fas fa-check-circle text-success me-1"></i>로드된 모델: ${ld}`;
+      } else {
+        hint.innerHTML = `<span class="loading-spinner me-1"></span>전환 중... 요청: ${rq}, 로딩: ${ld}${err}`;
+      }
     }
 
-    async function changeModel(path){
+    async function changeModel(path) {
       localStorage.setItem(LS_KEY_MODEL, path);
-      await fetch("/api/select_model", {
-        method:"POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({ path })
-      });
-      refreshModels();
+      try {
+        await fetch("/api/select_model", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path })
+        });
+        refreshModels();
+      } catch (error) {
+        console.error("모델 변경 실패:", error);
+      }
     }
 
-    async function refreshModels(){
-      try{
-        const r = await fetch("/api/models", {cache:"no-store"});
+    async function refreshModels() {
+      try {
+        const r = await fetch("/api/models", { cache: "no-store" });
         const d = await r.json();
         updateModelHint(d);
         const sel = document.getElementById("model-select");
         setSelectToPath(sel, d.requested || d.loaded);
-      }catch{}
+      } catch (error) {
+        console.error("모델 새로고침 실패:", error);
+      }
+    }
+
+    function updatePPEGrid(ppeData) {
+      const grid = document.getElementById("ppe-grid");
+      const items = grid.children;
+      
+      // PPE 아이템 상태 업데이트
+      const ppeItems = {
+        'helmet': items[0],
+        'vest': items[1], 
+        'mask': items[2],
+        'person': items[3]
+      };
+
+      // 모든 아이템 초기화
+      Object.values(ppeItems).forEach(item => {
+        item.className = 'ppe-item';
+      });
+
+      // 상태에 따른 업데이트
+      if (ppeData.has_person) {
+        ppeItems.person.className = 'ppe-item safe';
+        
+        Object.entries(ppeData.present).forEach(([key, present]) => {
+          if (ppeItems[key]) {
+            if (present) {
+              ppeItems[key].className = 'ppe-item safe';
+            } else if (ppeData.required.includes(key)) {
+              ppeItems[key].className = 'ppe-item violation';
+            } else {
+              ppeItems[key].className = 'ppe-item warning';
+            }
+          }
+        });
+      }
+
+      // 전체 상태 업데이트
+      const overallStatus = document.getElementById("ppe-overall-status");
+      const overallText = document.getElementById("ppe-overall-text");
+      
+      if (!ppeData.has_person) {
+        overallStatus.className = 'status-indicator';
+        overallText.textContent = '작업자 없음';
+      } else if (ppeData.status_code === 'safe') {
+        overallStatus.className = 'status-indicator online';
+        overallText.textContent = '안전';
+      } else if (ppeData.status_code === 'violation') {
+        overallStatus.className = 'status-indicator error';
+        overallText.textContent = '위반';
+      } else {
+        overallStatus.className = 'status-indicator warning';
+        overallText.textContent = '확인 필요';
+      }
+    }
+
+    function showAlert(message, type = 'warning') {
+      const alertSection = document.getElementById('alert-section');
+      const alertMessage = document.getElementById('alert-message');
+      
+      alertMessage.textContent = message;
+      alertSection.style.display = 'block';
+      
+      // 5초 후 자동 숨김
+      setTimeout(() => {
+        alertSection.style.display = 'none';
+      }, 5000);
     }
 
     async function pollStats() {
@@ -201,52 +713,69 @@
           fetch("/api/stream_stats", { cache: "no-store" }),
           fetch("/api/ppe_status", { cache: "no-store" }),
         ]);
+        
         const s = await sRes.json();
         const p = await ppeRes.json();
 
         const ok = (s && (s.width ?? 0) > 0);
-        document.getElementById("stat-res").textContent   = s.resolution ?? "-";
-        document.getElementById("stat-fps").textContent   = (s.fps ?? 0).toString();
-        document.getElementById("stat-frame").textContent = (s.frame_index ?? 0).toString();
+        
+        // 스트림 통계 업데이트
+        document.getElementById("stat-res").textContent = s.resolution ?? "-";
+        document.getElementById("stat-fps").textContent = (s.fps ?? 0).toFixed(1);
+        document.getElementById("stat-frame").textContent = (s.frame_index ?? 0).toLocaleString();
         document.getElementById("hud-res").textContent = s.resolution ?? "-";
         document.getElementById("hud-fps").textContent = (s.fps ?? 0).toFixed(1);
         document.getElementById("hud").hidden = !ok;
 
-        const dot = document.getElementById("status-dot");
-        const st  = document.getElementById("stat-status");
-        if (ok) { lastOkTs = Date.now(); dot.className = "status-dot on"; st.textContent = "RUNNING"; }
-        else if (Date.now() - lastOkTs > 4000) { dot.className = "status-dot err"; st.textContent = "NO SIGNAL"; }
-        else { dot.className = "status-dot"; st.textContent = "INIT"; }
+        // 시스템 상태 업데이트
+        const statusElement = document.getElementById("stat-status");
+        if (ok) { 
+          lastOkTs = Date.now(); 
+          statusElement.textContent = "실행 중";
+          statusElement.className = "stat-value text-success";
+        } else if (Date.now() - lastOkTs > 4000) { 
+          statusElement.textContent = "신호 없음";
+          statusElement.className = "stat-value text-danger";
+        } else { 
+          statusElement.textContent = "초기화";
+          statusElement.className = "stat-value text-warning";
+        }
 
-        const pdot = document.getElementById("person-dot");
-        const pst  = document.getElementById("person-status");
-        if (p.has_person) { pdot.className = "status-dot on"; pst.textContent = "DETECTED"; }
-        else { pdot.className = "status-dot"; pst.textContent = "NONE"; }
+        // PPE 상태 업데이트
+        updatePPEGrid(p);
+        
+        // 위반 알림
+        if (p.status_code === 'violation' && p.has_person) {
+          showAlert(`안전 위반: ${p.status_text}`);
+        }
 
-        const ppedot = document.getElementById("ppe-dot");
-        const ppest  = document.getElementById("ppe-status");
-        if (!p.has_person)      { ppedot.className = "status-dot";     ppest.textContent = "NO PERSON"; }
-        else if (p.status_code === "safe") { ppedot.className = "status-dot on";  ppest.textContent = "SAFE"; }
-        else if (p.status_code === "violation") { ppedot.className = "status-dot err"; ppest.textContent = p.status_text; }
-        else { ppedot.className = "status-dot warn"; ppest.textContent = p.status_text || "CHECK"; }
-      } catch (e) {}
+      } catch (error) {
+        console.error("통계 폴링 실패:", error);
+      }
     }
 
-    document.addEventListener("change", (ev)=>{
-      if(ev.target && ev.target.id === "model-select"){
+    // 이벤트 리스너
+    document.addEventListener("change", (ev) => {
+      if (ev.target && ev.target.id === "model-select") {
         changeModel(ev.target.value);
       }
     });
 
-    loadModels().then(()=>refreshModels());
+    // 초기화
+    loadModels().then(() => refreshModels());
     setInterval(refreshModels, 1000);
     pollStats();
     setInterval(pollStats, 500);
 
+    // 비디오 로딩 처리
     const img = document.getElementById('video');
     const skeleton = document.getElementById('skeleton');
-    img.addEventListener('load', () => { skeleton.classList.add('d-none'); });
-    img.addEventListener('error', () => { skeleton.classList.remove('d-none'); });
+    img.addEventListener('load', () => { 
+      skeleton.classList.add('d-none'); 
+    });
+    img.addEventListener('error', () => { 
+      skeleton.classList.remove('d-none'); 
+    });
   </script>
 </body>
 </html>

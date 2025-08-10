@@ -378,7 +378,8 @@ def yolo_inference_loop():
                 loaded_model_path = requested_model_path
                 last_model_error = None
         except Exception as e:
-            last_model_error = f"Initial model load failed: {e}"
+            last_model_error = f"초기 모델 로딩 실패: {e}"
+            print(f"[YOLO 스레드] 초기 모델 로딩 오류: {e}")
             traceback.print_exc()
 
     retry = 0
@@ -387,12 +388,12 @@ def yolo_inference_loop():
         if not cap.isOpened():
             retry += 1
             wait = min(5.0, 0.5 * retry)
-            print(f"[YOLO THREAD] Camera open failed. retry={retry} wait={wait:.1f}s")
+            print(f"[YOLO 스레드] 카메라 연결 실패. 재시도={retry} 대기시간={wait:.1f}초")
             time.sleep(wait)
             continue
 
-        print("[YOLO THREAD] RES:", cap.get(cv2.CAP_PROP_FRAME_WIDTH), "x", cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print("[YOLO THREAD] FPS:", cap.get(cv2.CAP_PROP_FPS))
+        print(f"[YOLO 스레드] 해상도: {cap.get(cv2.CAP_PROP_FRAME_WIDTH)} x {cap.get(cv2.CAP_PROP_FRAME_HEIGHT)}")
+        print(f"[YOLO 스레드] 프레임레이트: {cap.get(cv2.CAP_PROP_FPS)} FPS")
 
         frame_count = 0
         fps_counter = 0
@@ -405,14 +406,15 @@ def yolo_inference_loop():
                     try:
                         with model_lock:
                             if requested_model_path and requested_model_path != loaded_model_path:
-                                print(f"[YOLO THREAD] Loading model: {requested_model_path}")
+                                print(f"[YOLO 스레드] 모델 로딩 중: {os.path.basename(requested_model_path)}")
                                 new_model = _load_model(requested_model_path)
                                 model = new_model
                                 loaded_model_path = requested_model_path
                                 last_model_error = None
-                                print(f"[YOLO THREAD] Model loaded.")
+                                print(f"[YOLO 스레드] 모델 로딩 완료: {os.path.basename(requested_model_path)}")
                     except Exception as e:
-                        last_model_error = f"Model load failed: {e}"
+                        last_model_error = f"모델 로딩 실패: {e}"
+                        print(f"[YOLO 스레드] 모델 로딩 오류: {e}")
                         traceback.print_exc()
                     finally:
                         reload_event.clear()
@@ -452,14 +454,14 @@ def yolo_inference_loop():
                             torch.cuda.empty_cache()
                     elif model is None:
                         annotated = frame.copy()
-                        cv2.putText(annotated, "Model not loaded", (10, 30),
+                        cv2.putText(annotated, "모델이 로드되지 않음", (10, 30),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
                     frame_count += 1
 
                 except Exception as e:
                     annotated = frame.copy()
-                    cv2.putText(annotated, f"Detection error: {type(e).__name__}",
+                    cv2.putText(annotated, f"감지 오류: {type(e).__name__}",
                                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
                 with frame_lock:
@@ -561,15 +563,15 @@ def api_select_model():
     data = request.get_json(silent=True) or {}
     path = data.get("path")
     if not path:
-        return jsonify({"ok": False, "error": "path missing"}), 400
+        return jsonify({"ok": False, "error": "모델 경로가 지정되지 않았습니다"}), 400
     if not os.path.isabs(path):
         path = os.path.abspath(path)
     if not os.path.isfile(path):
-        return jsonify({"ok": False, "error": "file not found"}), 404
+        return jsonify({"ok": False, "error": "모델 파일을 찾을 수 없습니다"}), 404
     # weights 디렉토리 내부만 허용
     wd = os.path.abspath(WEIGHTS_DIR)
     if not os.path.abspath(path).startswith(wd):
-        return jsonify({"ok": False, "error": "path must be under weights/"}), 400
+        return jsonify({"ok": False, "error": "모델 파일은 weights/ 디렉토리 내에 있어야 합니다"}), 400
 
     requested_model_path = path
     reload_event.set()
@@ -579,5 +581,17 @@ def api_select_model():
 # 실행
 # -----------------------------
 if __name__ == "__main__":
+    print("=" * 60)
+    print("🚀 PPE 안전장비 감지 시스템 시작")
+    print("=" * 60)
+    print(f"📁 모델 디렉토리: {WEIGHTS_DIR}")
+    print(f"🎥 카메라 인덱스: {CAM_INDEX}")
+    print(f"🖥️  디바이스: {device}")
+    print(f"🌐 서버 주소: http://localhost:5000")
+    print(f"📊 시스템 정보: http://localhost:5000/about")
+    print("=" * 60)
+    
     threading.Thread(target=yolo_inference_loop, daemon=True).start()
+    print("✅ YOLO 추론 스레드 시작됨")
+    print("🌐 Flask 웹서버 시작 중...")
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=False)

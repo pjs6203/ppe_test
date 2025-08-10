@@ -1,82 +1,526 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>About · System Information</title>
-  <link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/css/styles.min.css" rel="stylesheet"/>
-  <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+  <title>시스템 정보 · PPE 안전장비 감지 시스템</title>
+  
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <style>
-    .mini-badge{font-size:.85rem;padding:.15rem .5rem;border-radius:.5rem;background:rgba(33,37,41,.85);color:#fff}
-    .chart-wrap{height:200px}
+    :root {
+      --primary-color: #3b82f6;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --danger-color: #ef4444;
+      --dark-bg: #0f172a;
+      --card-bg: #1e293b;
+      --border-color: #475569;
+      --text-primary: #ffffff;
+      --text-secondary: #e2e8f0;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      font-weight: 400;
+      line-height: 1.6;
+    }
+
+    .navbar {
+      background: rgba(15, 23, 42, 0.98) !important;
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--primary-color) !important;
+    }
+
+    .main-container {
+      padding: 2rem 0;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      margin-bottom: 2rem;
+    }
+
+    .card-header {
+      background: rgba(30, 41, 59, 0.9);
+      border-bottom: 1px solid var(--border-color);
+      border-radius: 16px 16px 0 0 !important;
+      padding: 1.5rem;
+    }
+
+    .card-header h5 {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+
+    .table {
+      color: var(--text-primary);
+      background: transparent;
+    }
+    
+    .table-borderless {
+      background: rgba(30, 41, 59, 0.3);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .table th {
+      border-color: var(--border-color);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .table td {
+      border-color: var(--border-color);
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .progress {
+      background: rgba(30, 41, 59, 0.7);
+      border-radius: 8px;
+      height: 8px;
+    }
+
+    .progress-bar {
+      border-radius: 8px;
+      transition: width 0.3s ease;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 200px;
+      margin-top: 1rem;
+    }
+
+    .metric-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .metric-label {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .metric-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      opacity: 0.8;
+    }
+
+    .gpu-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+         .gpu-header {
+       display: flex;
+       justify-content: space-between;
+       align-items: center;
+       margin-bottom: 1rem;
+     }
+
+    .gpu-name {
+      font-weight: 600;
+      color: var(--primary-color);
+      font-size: 1rem;
+    }
+
+    .gpu-util {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .gpu-memory {
+      background: rgba(30, 41, 59, 0.5);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .memory-bar {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    .memory-used {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .version-badge {
+      display: inline-block;
+      background: rgba(30, 41, 59, 0.8);
+      color: #93c5fd;
+      padding: 0.4rem 1rem;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 0.5rem;
+    }
+
+    .status-indicator.online {
+      background: var(--success-color);
+      box-shadow: 0 0 8px var(--success-color);
+    }
+
+    .status-indicator.warning {
+      background: var(--warning-color);
+      box-shadow: 0 0 8px var(--warning-color);
+    }
+
+    .status-indicator.offline {
+      background: var(--danger-color);
+      box-shadow: 0 0 8px var(--danger-color);
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      border: none;
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+    }
+
+    .nav-link {
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+
+    .nav-link:hover {
+      color: var(--primary-color);
+    }
+
+    .nav-link.active {
+      color: var(--primary-color);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    /* 텍스트 가독성 개선 */
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .text-muted {
+      color: var(--text-muted) !important;
+      font-weight: 500;
+    }
+
+    .small {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* 테이블 텍스트 개선 */
+    .table-borderless td {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+      padding: 1rem 1.5rem;
+      border: none;
+      background: transparent;
+    }
+    
+    .table-borderless td:first-child {
+      color: var(--text-secondary);
+      font-weight: 500;
+      border-right: 1px solid rgba(71, 85, 105, 0.3);
+    }
+    
+    .table-borderless tr:hover {
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    /* 섹션 제목 스타일 */
+    .section-title {
+      color: var(--text-primary);
+      font-weight: 600;
+      font-size: 1.1rem;
+      border-bottom: 2px solid rgba(59, 130, 246, 0.4);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+         /* GPU 정보 텍스트 개선 */
+     .gpu-memory .small {
+       color: var(--text-secondary);
+       font-weight: 600;
+     }
+     
+     /* 시스템 상태 텍스트 개선 */
+     .status-text {
+       color: var(--text-primary);
+       font-weight: 600;
+       font-size: 0.95rem;
+       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+     }
+
+    @media (max-width: 768px) {
+      .main-container {
+        padding: 1rem 0;
+      }
+      
+      .metric-card {
+        margin-bottom: 1rem;
+      }
+      
+      .gpu-card {
+        margin-bottom: 1rem;
+      }
+    }
   </style>
 </head>
-<body class="sb-nav-fixed">
-  <!-- Topbar -->
-  <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-    <a class="navbar-brand ps-3" href="{{ url_for('index') }}">YOLO Detector</a>
-    <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle"><i class="fas fa-bars"></i></button>
-    <ul class="navbar-nav ms-auto me-3 me-lg-4">
-      <li class="nav-item d-none d-lg-block my-auto">
-        <span class="mini-badge me-2"><i class="fa-solid fa-microchip me-1"></i><span id="top_cpu">--%</span></span>
-      </li>
-      <li class="nav-item d-none d-lg-block my-auto">
-        <span class="mini-badge"><i class="fa-solid fa-memory me-1"></i><span id="top_mem">--%</span></span>
-      </li>
-    </ul>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="fas fa-shield-alt me-2"></i>
+        PPE 안전장비 감지 시스템
+      </a>
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{{ url_for('webcam_page') }}">
+          <i class="fas fa-video me-1"></i>
+          실시간 감지
+        </a>
+        <a class="nav-link active" href="{{ url_for('about') }}">
+          <i class="fas fa-info-circle me-1"></i>
+          시스템 정보
+        </a>
+      </div>
+    </div>
   </nav>
 
-  <div id="layoutSidenav">
-    <!-- Sidebar -->
-    <div id="layoutSidenav_nav">
-      <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
-        <div class="sb-sidenav-menu">
-          <div class="nav">
-            <div class="sb-sidenav-menu-heading">Navigation</div>
-            <a class="nav-link" href="{{ url_for('webcam_page') }}">
-              <div class="sb-nav-link-icon"><i class="fas fa-video"></i></div>
-              Live Detection
-            </a>
-            <a class="nav-link active" href="{{ url_for('about') }}">
-              <div class="sb-nav-link-icon"><i class="fas fa-info-circle"></i></div>
-              About
-            </a>
-          </div>
+  <div class="main-container">
+    <div class="container-fluid">
+      <!-- Header -->
+      <div class="row mb-4">
+        <div class="col-12">
+          <h1 class="h2 mb-2">
+            <i class="fas fa-server me-2"></i>
+            시스템 정보
+          </h1>
+          <p class="text-muted">실시간 시스템 모니터링 및 버전 정보</p>
         </div>
-      </nav>
-    </div>
+      </div>
 
-    <!-- Content -->
-    <div id="layoutSidenav_content">
-      <main>
-        <div class="container-fluid px-4">
-          <h1 class="mt-4">System Information</h1>
 
-          <!-- Versions -->
-          <div class="card mb-4">
-            <div class="card-header">
-              <i class="fas fa-code-branch me-1"></i> Versions
-            </div>
+
+             <div class="row">
+         <!-- Live Performance Charts -->
+         <div class="col-12 mb-4">
+           <div class="card">
+             <div class="card-header">
+               <h5 class="mb-0">
+                 <i class="fas fa-chart-line me-2"></i>
+                 실시간 성능 모니터링
+               </h5>
+             </div>
+             <div class="card-body">
+               <div class="row">
+                                   <div class="col-md-6 mb-4">
+
+                    <div class="gpu-memory mb-2">
+                      <div class="d-flex justify-content-between small text-muted">
+                        <span>CPU</span>
+                        <span id="cpu-percent">0%</span>
+                      </div>
+                      <div class="memory-bar">
+                        <div class="memory-used" id="cpu-progress" style="width: 0%"></div>
+                      </div>
+                    </div>
+                    <div class="chart-container">
+                      <canvas id="cpu-chart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-4">
+
+                                         <div class="gpu-memory mb-2">
+                       <div class="d-flex justify-content-between small text-muted">
+                         <span>RAM</span>
+                         <span id="mem-percent">0GB / 0GB</span>
+                       </div>
+                       <div class="memory-bar">
+                         <div class="memory-used" id="mem-progress" style="width: 0%"></div>
+                       </div>
+                     </div>
+                    <div class="chart-container">
+                      <canvas id="mem-chart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-4">
+
+                    <div class="gpu-memory mb-2">
+                      <div class="d-flex justify-content-between small text-muted">
+                        <span>GPU</span>
+                        <span id="gpu-percent">0%</span>
+                      </div>
+                      <div class="memory-bar">
+                        <div class="memory-used" id="gpu-progress" style="width: 0%"></div>
+                      </div>
+                    </div>
+                    <div class="chart-container">
+                      <canvas id="gpu-chart"></canvas>
+                    </div>
+                  </div>
+                  <div class="col-md-6 mb-4">
+
+                                         <div class="gpu-memory mb-2">
+                       <div class="d-flex justify-content-between small text-muted">
+                         <span>VRAM</span>
+                         <span id="vram-percent">0GB / 0GB</span>
+                       </div>
+                       <div class="memory-bar">
+                         <div class="memory-used" id="vram-progress" style="width: 0%"></div>
+                       </div>
+                     </div>
+                    <div class="chart-container">
+                      <canvas id="vram-chart"></canvas>
+                    </div>
+                  </div>
+               </div>
+             </div>
+           </div>
+         </div>
+         
+         <!-- Left Column -->
+         <div class="col-lg-8">
+           <!-- System Versions -->
+           <div class="card">
+             <div class="card-header">
+               <h5 class="mb-0">
+                 <i class="fas fa-code-branch me-2"></i>
+                 시스템 버전 정보
+               </h5>
+             </div>
             <div class="card-body">
               <div class="row">
                 <div class="col-md-6">
-                  <table class="table table-sm mb-0">
+                  <h6 class="section-title mb-3">기본 환경</h6>
+                  <table class="table table-borderless">
                     <tbody>
-                      <tr><th class="w-50">Python</th><td>{{ versions.python or 'N/A' }}</td></tr>
-                      <tr><th>PyTorch</th><td>{{ versions.torch or 'N/A' }}</td></tr>
-                      <tr><th>Ultralytics</th><td>{{ versions.ultralytics or 'N/A' }}</td></tr>
-                      <tr><th>OpenCV</th><td>{{ versions.opencv or 'N/A' }}</td></tr>
+                      <tr>
+                        <td><i class="fab fa-python me-2" style="color: #3776ab;"></i>Python</td>
+                        <td><span class="version-badge">{{ versions.python or 'N/A' }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-fire me-2" style="color: #ee4c2c;"></i>PyTorch</td>
+                        <td><span class="version-badge">{{ versions.torch or 'N/A' }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-brain me-2" style="color: #00d4aa;"></i>Ultralytics</td>
+                        <td><span class="version-badge">{{ versions.ultralytics or 'N/A' }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-eye me-2" style="color: #5a9bd5;"></i>OpenCV</td>
+                        <td><span class="version-badge">{{ versions.opencv or 'N/A' }}</span></td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
                 <div class="col-md-6">
-                  <table class="table table-sm mb-0">
+                  <h6 class="section-title mb-3">GPU 환경</h6>
+                  <table class="table table-borderless">
                     <tbody>
-                      <tr><th class="w-50">CUDA</th><td>{{ versions.cuda or 'N/A' }}</td></tr>
-                      <tr><th>cuDNN</th><td>{{ versions.cudnn or 'N/A' }}</td></tr>
-                      <tr><th>Device</th><td>{{ versions.device }}</td></tr>
-                      <tr><th>GPU(s)</th><td>{% if versions.gpus %}{{ versions.gpus|join(', ') }}{% else %}N/A{% endif %}</td></tr>
+                      <tr>
+                        <td><i class="fas fa-microchip me-2" style="color: #76b900;"></i>CUDA</td>
+                        <td><span class="version-badge">{{ versions.cuda or 'N/A' }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-layer-group me-2" style="color: #00d4aa;"></i>cuDNN</td>
+                        <td><span class="version-badge">{{ versions.cudnn or 'N/A' }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-desktop me-2" style="color: #f59e0b;"></i>Device</td>
+                        <td><span class="version-badge">{{ versions.device }}</span></td>
+                      </tr>
+                      <tr>
+                        <td><i class="fas fa-server me-2" style="color: #8b5cf6;"></i>GPU Count</td>
+                        <td><span class="version-badge">{{ versions.gpus|length if versions.gpus else 0 }}</span></td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -84,236 +528,405 @@
             </div>
           </div>
 
-          <!-- Live Usage -->
-          <div class="card mb-4">
+          <!-- GPU Information -->
+          {% if versions.gpus %}
+          <div class="card">
             <div class="card-header">
-              <i class="fas fa-gauge-high me-1"></i> Usage (Live)
+              <h5 class="mb-0">
+                <i class="fas fa-microchip me-2"></i>
+                GPU 정보
+              </h5>
             </div>
             <div class="card-body">
-              <div class="row">
-                <div class="col-lg-4 mb-4">
-                  <div class="d-flex justify-content-between">
-                    <span>CPU</span><span id="cpu_label">--%</span>
-                  </div>
-                  <div class="progress mb-2"><div id="cpu_bar" class="progress-bar" style="width:0%"></div></div>
-                  <div class="chart-wrap"><canvas id="cpu_chart"></canvas></div>
+              {% for gpu in versions.gpus %}
+              <div class="gpu-card">
+                <div class="gpu-header">
+                  <div class="gpu-name">{{ gpu }}</div>
+                  <div class="gpu-util">GPU #{{ loop.index0 }}</div>
                 </div>
-                <div class="col-lg-4 mb-4">
-                  <div class="d-flex justify-content-between">
-                    <span>Memory</span><span id="mem_label">--%</span>
+                <div class="gpu-memory">
+                  <div class="d-flex justify-content-between small text-muted">
+                    <span>VRAM</span>
+                    <span id="gpu-{{ loop.index0 }}-mem">--</span>
                   </div>
-                  <div class="progress mb-2"><div id="mem_bar" class="progress-bar" style="width:0%"></div></div>
-                  <small class="text-muted" id="mem_detail">-- / --</small>
-                  <div class="chart-wrap mt-2"><canvas id="mem_chart"></canvas></div>
-                </div>
-                <div class="col-lg-4 mb-4">
-                  <div class="d-flex justify-content-between">
-                    <span>GPU VRAM</span><span id="gpu_label">--%</span>
+                  <div class="memory-bar">
+                    <div class="memory-used" id="gpu-{{ loop.index0 }}-bar" style="width: 0%"></div>
                   </div>
-                  <div class="progress mb-2"><div id="gpu_bar" class="progress-bar bg-success" style="width:0%"></div></div>
-                  <small class="text-muted d-block" id="gpu_detail">No CUDA GPU detected.</small>
-                  <div class="chart-wrap mt-2"><canvas id="gpu_chart"></canvas></div>
-                  <!-- NEW: GPU Load (SM Util) -->
-                  <div class="d-flex justify-content-between mt-3">
-                    <span>GPU Load (SM)</span><span id="gpu_sm_label">--%</span>
-                  </div>
-                  <div class="chart-wrap mt-2"><canvas id="gpu_sm_chart"></canvas></div>
                 </div>
               </div>
-              <div id="gpu_container"></div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          
+        </div>
+
+        <!-- Right Column -->
+        <div class="col-lg-4">
+          <!-- System Status -->
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-heartbeat me-2"></i>
+                시스템 상태
+              </h5>
+            </div>
+                         <div class="card-body">
+               <div class="d-flex align-items-center mb-3">
+                 <span class="status-indicator online"></span>
+                 <span class="ms-2 status-text">시스템 정상</span>
+               </div>
+               <div class="d-flex align-items-center mb-3">
+                 <span class="status-indicator online"></span>
+                 <span class="ms-2 status-text">웹캠 연결됨</span>
+               </div>
+               <div class="d-flex align-items-center mb-3">
+                 <span class="status-indicator online"></span>
+                 <span class="ms-2 status-text">AI 모델 로드됨</span>
+               </div>
+               <div class="d-flex align-items-center">
+                 <span class="status-indicator online"></span>
+                 <span class="ms-2 status-text">데이터베이스 연결됨</span>
+               </div>
+             </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-tools me-2"></i>
+                빠른 작업
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="d-grid gap-2">
+                <a href="{{ url_for('webcam_page') }}" class="btn btn-primary">
+                  <i class="fas fa-video me-2"></i>
+                  실시간 감지 시작
+                </a>
+                <a href="/snapshot.jpg" target="_blank" class="btn btn-outline-primary">
+                  <i class="fas fa-camera me-2"></i>
+                  스냅샷 촬영
+                </a>
+                <button class="btn btn-outline-secondary" onclick="location.reload()">
+                  <i class="fas fa-sync-alt me-2"></i>
+                  페이지 새로고침
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- System Info -->
+          <div class="card">
+            <div class="card-header">
+              <h5 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                시스템 정보
+              </h5>
+            </div>
+            <div class="card-body">
+              <div class="small text-muted">
+                <div class="mb-2">
+                  <strong>플랫폼:</strong> {{ versions.device.upper() }}
+                </div>
+                <div class="mb-2">
+                  <strong>GPU:</strong> 
+                  {% if versions.gpus %}
+                    {{ versions.gpus|length }}개 감지됨
+                  {% else %}
+                    GPU 없음 (CPU 모드)
+                  {% endif %}
+                </div>
+                <div class="mb-2">
+                  <strong>CUDA:</strong> 
+                  {% if versions.cuda %}
+                    지원됨 ({{ versions.cuda }})
+                  {% else %}
+                    지원되지 않음
+                  {% endif %}
+                </div>
+                <div>
+                  <strong>업데이트:</strong> 실시간
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </main>
-      <footer class="py-4 bg-light mt-auto">
-        <div class="container-fluid px-4"></div>
-      </footer>
+      </div>
     </div>
   </div>
 
-  <!-- JS -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin@7.0.7/dist/js/scripts.min.js"></script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
   <script>
-    // ---------- Persist state in localStorage ----------
-    const STORAGE_KEY = 'yd_metrics_v2';   // v2: add gpu_sm
-    const WINDOW_SEC  = 300;               // keep last 5 minutes
-    const MAX_POINTS  = 300;               // 1s interval -> 300 points
-
-    function nowSec(){ return Math.floor(Date.now()/1000); }
-
-    function loadState(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if(!raw) return null;
-        const s = JSON.parse(raw);
-        if(!s || !Array.isArray(s.ts) || !Array.isArray(s.cpu) || !Array.isArray(s.mem) || !Array.isArray(s.gpu) || !Array.isArray(s.gpu_sm)) return null;
-        return s;
-      }catch{ return null; }
-    }
-    function saveState(state){
-      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
-    }
-    function trimState(state){
-      const cutoff = nowSec() - WINDOW_SEC;
-      while(state.ts.length && state.ts[0] < cutoff){
-        state.ts.shift(); state.cpu.shift(); state.mem.shift(); state.gpu.shift(); state.gpu_sm.shift();
+    // 차트 설정
+    const chartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        }
+      },
+      scales: {
+        x: {
+          display: false
+        },
+        y: {
+          beginAtZero: true,
+          max: 100,
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)'
+          },
+          ticks: {
+            color: '#cbd5e1'
+          }
+        }
+      },
+      elements: {
+        point: {
+          radius: 0
+        },
+        line: {
+          borderWidth: 2
+        }
       }
-      if(state.ts.length > MAX_POINTS){
-        const drop = state.ts.length - MAX_POINTS;
-        state.ts.splice(0, drop);
-        state.cpu.splice(0, drop);
-        state.mem.splice(0, drop);
-        state.gpu.splice(0, drop);
-        state.gpu_sm.splice(0, drop);
-      }
-    }
-    function initState(){
-      const s = loadState() || { ts:[], cpu:[], mem:[], gpu:[], gpu_sm:[] };
-      trimState(s);
-      return s;
-    }
+    };
 
-    function humanBytes(n){
-      if (n === null || n === undefined) return 'N/A';
-      const units = ['B','KB','MB','GB','TB']; let i=0; let v = n;
-      while (v >= 1024 && i < units.length-1){ v/=1024; i++; }
-      return v.toFixed(1)+' '+units[i];
-    }
+         // CPU 차트
+     const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
+     const cpuChart = new Chart(cpuCtx, {
+       type: 'line',
+       data: {
+         labels: Array(60).fill(''),
+         datasets: [{
+           data: Array(60).fill(0),
+           borderColor: '#2563eb',
+           backgroundColor: 'rgba(37, 99, 235, 0.1)',
+           fill: true,
+           tension: 0.4
+         }]
+       },
+       options: chartOptions
+     });
 
-    function lineConfig(label, initData){
-      const n = Math.max(30, initData.length || 0);
-      const padded = Array(Math.max(0, n - initData.length)).fill(0).concat(initData);
-      return {
+          // 메모리 차트
+      const memCtx = document.getElementById('mem-chart').getContext('2d');
+      const memChart = new Chart(memCtx, {
         type: 'line',
-        data: { labels: Array(n).fill(''), datasets: [{ label, data: padded }] },
-        options: { animation:false, responsive:true, maintainAspectRatio:false,
-          scales:{ y:{ min:0, max:100, ticks:{ stepSize:25 }}, x:{ display:false } },
-          plugins:{ legend:{ display:false } }
-        }
-      };
-    }
-
-    const state = initState();
-
-    const cpuChart   = new Chart(document.getElementById('cpu_chart'),   lineConfig('CPU',   state.cpu));
-    const memChart   = new Chart(document.getElementById('mem_chart'),   lineConfig('MEM',   state.mem));
-    const gpuChart   = new Chart(document.getElementById('gpu_chart'),   lineConfig('GPU',   state.gpu));     // VRAM %
-    const gpuSmChart = new Chart(document.getElementById('gpu_sm_chart'),lineConfig('GPU-SM',state.gpu_sm));  // SM Util %
-
-    function pushChart(chart, v, targetArray){
-      const arr = chart.data.datasets[0].data;
-      arr.push(v ?? 0);
-      arr.shift();
-      chart.update('none');           // no animation
-      targetArray.push(v ?? 0);
-    }
-
-    function renderGPUs(gpus){
-      const wrap = document.getElementById('gpu_container');
-      wrap.innerHTML = '';
-      if(!gpus || !gpus.length){
-        wrap.innerHTML = '<div class="text-muted">No CUDA GPU detected.</div>';
-        return;
-      }
-      gpus.forEach((g)=>{
-        const vramPct = g.vram_percent ?? 0;
-        const sm = (g.sm_util ?? 'N/A');
-        const mc = (g.mem_util ?? 'N/A');
-        const enc = (g.enc_util ?? 'N/A');
-        const dec = (g.dec_util ?? 'N/A');
-        const pcie = (g.pcie_rx_kbs!=null && g.pcie_tx_kbs!=null)
-          ? `PCIe RX ${g.pcie_rx_kbs} KB/s · TX ${g.pcie_tx_kbs} KB/s` : '';
-
-        const card = document.createElement('div');
-        card.className = 'mb-3';
-        card.innerHTML = `
-          <div class="d-flex justify-content-between">
-            <span>GPU ${g.index}: ${g.name}</span>
-            <span>SM Util: ${sm}%</span>
-          </div>
-          <div class="progress"><div class="progress-bar bg-success" style="width:${vramPct}%"></div></div>
-          <small class="text-muted d-block">VRAM ${humanBytes(g.vram_used)} / ${humanBytes(g.vram_total)} (${vramPct}%)</small>
-          <small class="text-muted d-block">Mem Ctrl: ${mc}% · Enc: ${enc}% · Dec: ${dec}%</small>
-          <small class="text-muted">${pcie}</small>
-        `;
-        wrap.appendChild(card);
+        data: {
+          labels: Array(60).fill(''),
+          datasets: [{
+            data: Array(60).fill(0),
+            borderColor: '#16a34a',
+            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartOptions
       });
-    }
 
-    async function refresh(){
-      try {
-        const r = await fetch('{{ url_for("api_system_metrics") }}', { cache:'no-store'});
-        const d = await r.json();
+      // GPU 차트
+      const gpuCtx = document.getElementById('gpu-chart').getContext('2d');
+      const gpuChart = new Chart(gpuCtx, {
+        type: 'line',
+        data: {
+          labels: Array(60).fill(''),
+          datasets: [{
+            data: Array(60).fill(0),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartOptions
+      });
 
-        // Top badges
-        document.getElementById('top_cpu').textContent = (d.cpu_percent ?? 0) + '%';
-        document.getElementById('top_mem').textContent = (d.mem_percent ?? 0).toFixed(1) + '%';
+      // VRAM 차트
+      const vramCtx = document.getElementById('vram-chart').getContext('2d');
+      const vramChart = new Chart(vramCtx, {
+        type: 'line',
+        data: {
+          labels: Array(60).fill(''),
+          datasets: [{
+            data: Array(60).fill(0),
+            borderColor: '#06b6d4',
+            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+            fill: true,
+            tension: 0.4
+          }]
+        },
+        options: chartOptions
+      });
 
-        // CPU
-        const cpuPct = (d.cpu_percent ?? 0);
-        document.getElementById('cpu_label').textContent = cpuPct + '%';
-        document.getElementById('cpu_bar').style.width = cpuPct + '%';
-        pushChart(cpuChart, cpuPct, state.cpu);
-
-        // Memory
-        const memPct = (d.mem_percent ?? 0);
-        document.getElementById('mem_label').textContent = memPct.toFixed(1) + '%';
-        document.getElementById('mem_bar').style.width = memPct + '%';
-        document.getElementById('mem_detail').textContent =
-          humanBytes(d.mem_used) + ' / ' + humanBytes(d.mem_total);
-        pushChart(memChart, memPct, state.mem);
-
-        // GPUs (first GPU summary)
-        let firstVramPct = 0, firstSm = 0, detail = 'No CUDA GPU detected.';
-        if (d.gpus && d.gpus.length){
-          const g0 = d.gpus[0];
-          firstVramPct = g0.vram_percent ?? 0;
-          firstSm = g0.sm_util ?? 0;
-          detail = `GPU ${g0.index}: ${g0.name} — ${humanBytes(g0.vram_used)} / ${humanBytes(g0.vram_total)} (${firstVramPct}%)`;
+         // 시스템 메트릭 업데이트
+     async function updateSystemMetrics() {
+       try {
+         const response = await fetch('/api/system_metrics', { cache: 'no-store' });
+         const data = await response.json();
+         
+                   // CPU 업데이트
+          const cpuPercent = Math.round(data.cpu_percent || 0);
+          document.getElementById('cpu-progress').style.width = cpuPercent + '%';
+          document.getElementById('cpu-percent').textContent = cpuPercent + '%';
+          
+          // 메모리 업데이트
+          const memPercent = Math.round(data.mem_percent || 0);
+          const memUsed = ((data.mem_used || 0) / 1024 / 1024 / 1024).toFixed(1);
+          const memTotal = ((data.mem_total || 0) / 1024 / 1024 / 1024).toFixed(1);
+          document.getElementById('mem-progress').style.width = memPercent + '%';
+          document.getElementById('mem-percent').textContent = `${memUsed}GB / ${memTotal}GB`;
+          
+          // GPU 업데이트
+          let gpuPercent = 0;
+          let vramPercent = 0;
+          let vramUsed = 0;
+          let vramTotal = 0;
+          if (data.gpus && data.gpus.length > 0) {
+            // 첫 번째 GPU의 SM 사용률 사용
+            gpuPercent = Math.round(data.gpus[0].sm_util || 0);
+            vramPercent = Math.round(data.gpus[0].vram_percent || 0);
+            vramUsed = (data.gpus[0].vram_used / 1024 / 1024 / 1024).toFixed(1);
+            vramTotal = (data.gpus[0].vram_total / 1024 / 1024 / 1024).toFixed(1);
+          }
+          document.getElementById('gpu-progress').style.width = gpuPercent + '%';
+          document.getElementById('gpu-percent').textContent = gpuPercent + '%';
+          document.getElementById('vram-progress').style.width = vramPercent + '%';
+          document.getElementById('vram-percent').textContent = `${vramUsed}GB / ${vramTotal}GB`;
+         
+         // 차트 업데이트 (부드러운 애니메이션)
+         updateChartSmooth(cpuChart, cpuPercent);
+         updateChartSmooth(memChart, memPercent);
+         updateChartSmooth(gpuChart, gpuPercent);
+         updateChartSmooth(vramChart, vramPercent);
+        
+        // GPU 업데이트
+        if (data.gpus && data.gpus.length > 0) {
+          data.gpus.forEach((gpu, index) => {
+            const memPercent = gpu.vram_percent || 0;
+            const memUsed = (gpu.vram_used / 1024 / 1024 / 1024).toFixed(1);
+            const memTotal = (gpu.vram_total / 1024 / 1024 / 1024).toFixed(1);
+            
+            const memElement = document.getElementById(`gpu-${index}-mem`);
+            const barElement = document.getElementById(`gpu-${index}-bar`);
+            
+            if (memElement && barElement) {
+              memElement.textContent = `${memUsed}GB / ${memTotal}GB`;
+              barElement.style.width = memPercent + '%';
+            }
+          });
         }
-        // VRAM %
-        document.getElementById('gpu_label').textContent = (firstVramPct||0) + '%';
-        document.getElementById('gpu_bar').style.width = (firstVramPct||0) + '%';
-        document.getElementById('gpu_detail').textContent = detail;
-        pushChart(gpuChart, firstVramPct||0, state.gpu);
-        // SM Util %
-        document.getElementById('gpu_sm_label').textContent = (firstSm||0) + '%';
-        pushChart(gpuSmChart, firstSm||0, state.gpu_sm);
-
-        renderGPUs(d.gpus);
-
-        // Persist every 2s
-        state.ts.push(nowSec());
-        trimState(state);
-        if(!refresh._lastSave || (Date.now() - refresh._lastSave) > 2000){
-          saveState(state);
-          refresh._lastSave = Date.now();
-        }
-      } catch(e) {
-        console.error(e);
+        
+      } catch (error) {
+        console.error('시스템 메트릭 업데이트 실패:', error);
       }
     }
-    refresh();
-    setInterval(refresh, 1000);
 
-    // Sync when another tab updates the same key
-    window.addEventListener('storage', (ev)=>{
-      if(ev.key !== STORAGE_KEY) return;
-      const s2 = loadState(); if(!s2) return;
-      state.ts = s2.ts; state.cpu = s2.cpu; state.mem = s2.mem; state.gpu = s2.gpu; state.gpu_sm = s2.gpu_sm;
-      const sync = (chart, arr)=>{
-        const n = chart.data.datasets[0].data.length;
-        const tail = arr.slice(-n);
-        const padded = Array(Math.max(0, n - tail.length)).fill(0).concat(tail);
-        chart.data.datasets[0].data = padded;
-        chart.update('none');
-      };
-      sync(cpuChart, state.cpu);
-      sync(memChart, state.mem);
-      sync(gpuChart, state.gpu);
-      sync(gpuSmChart, state.gpu_sm);
-    });
+         // 차트 데이터 저장
+     function saveChartData() {
+       const chartData = {
+         cpu: cpuChart.data.datasets[0].data,
+         mem: memChart.data.datasets[0].data,
+         gpu: gpuChart.data.datasets[0].data,
+         vram: vramChart.data.datasets[0].data,
+         timestamp: Date.now()
+       };
+       localStorage.setItem('chartData', JSON.stringify(chartData));
+     }
+     
+     // 차트 데이터 복원
+     function loadChartData() {
+       const saved = localStorage.getItem('chartData');
+       if (saved) {
+         try {
+           const data = JSON.parse(saved);
+           const now = Date.now();
+           const maxAge = 5 * 60 * 1000; // 5분
+           
+           // 5분 이내의 데이터만 사용
+           if (now - data.timestamp < maxAge) {
+             if (data.cpu && data.cpu.length > 0) {
+               cpuChart.data.datasets[0].data = data.cpu;
+               cpuChart.update('none');
+             }
+             if (data.mem && data.mem.length > 0) {
+               memChart.data.datasets[0].data = data.mem;
+               memChart.update('none');
+             }
+             if (data.gpu && data.gpu.length > 0) {
+               gpuChart.data.datasets[0].data = data.gpu;
+               gpuChart.update('none');
+             }
+             if (data.vram && data.vram.length > 0) {
+               vramChart.data.datasets[0].data = data.vram;
+               vramChart.update('none');
+             }
+             console.log('차트 데이터 복원됨');
+           } else {
+             localStorage.removeItem('chartData');
+           }
+         } catch (error) {
+           console.error('차트 데이터 복원 실패:', error);
+           localStorage.removeItem('chartData');
+         }
+       }
+     }
+     
+     // 부드러운 차트 업데이트
+     function updateChartSmooth(chart, value) {
+       const currentData = chart.data.datasets[0].data;
+       const lastValue = currentData[currentData.length - 1] || 0;
+       
+       // 부드러운 보간을 위한 중간값 추가
+       if (Math.abs(value - lastValue) > 5) {
+         const steps = 3;
+         for (let i = 1; i <= steps; i++) {
+           const interpolatedValue = lastValue + (value - lastValue) * (i / steps);
+           currentData.push(interpolatedValue);
+         }
+       } else {
+         currentData.push(value);
+       }
+       
+               // 최대 60개 데이터 포인트 유지 (60초)
+        while (currentData.length > 60) {
+          currentData.shift();
+        }
+       
+       chart.update('none');
+       
+       // 데이터 저장 (주기적으로)
+       if (Math.random() < 0.1) { // 10% 확률로 저장 (약 20초마다)
+         saveChartData();
+       }
+     }
+     
+     // 기존 차트 업데이트 함수 (호환성용)
+     function updateChart(chart, value) {
+       updateChartSmooth(chart, value);
+     }
+
+         // 초기화 및 주기적 업데이트
+     loadChartData(); // 저장된 차트 데이터 복원
+     updateSystemMetrics();
+     setInterval(updateSystemMetrics, 2000);
+     
+     // 페이지 언로드 시 데이터 저장
+     window.addEventListener('beforeunload', function() {
+       saveChartData();
+     });
+     
+     // 페이지 가시성 변경 시 데이터 저장
+     document.addEventListener('visibilitychange', function() {
+       if (document.hidden) {
+         saveChartData();
+       }
+     });
   </script>
 </body>
 </html>
