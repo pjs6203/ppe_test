@@ -22,6 +22,13 @@
       scales: { x: { display:false }, y: { beginAtZero:true, max:100, grid:{ color:'rgba(255,255,255,0.1)' }, ticks:{ color:'#cbd5e1' } } },
       elements: { point:{ radius:0 }, line:{ borderWidth:2 } }
     };
+    // 이미 연결된 차트가 있으면 파괴하고 재생성하거나 재사용
+    try{
+      const existing = Chart.getChart(ctx.canvas);
+      if (existing) {
+        try { existing.destroy(); } catch{}
+      }
+    }catch{}
     return new Chart(ctx, { type:'line', data:{ labels:Array(60).fill(''), datasets:[{ data:Array(60).fill(0), borderColor: color, backgroundColor: color.replace('1)', '0.1)'), fill:true, tension:0.4 }] }, options: opt });
   }
 
@@ -39,7 +46,12 @@
       const d = await res.json();
       const cpuP = Math.round(d.cpu_percent||0);
       const memP = Math.round(d.mem_percent||0);
-      let gpuP=0, vramP=0; if (d.gpus && d.gpus.length>0){ gpuP = Math.round(d.gpus[0].sm_util||0); vramP = Math.round(d.gpus[0].vram_percent||0); }
+      let gpuP=0, vramP=0, vramUsed=0, vramTotal=0; if (d.gpus && d.gpus.length>0){
+        gpuP = Math.round(d.gpus[0].sm_util||0);
+        vramP = Math.round(d.gpus[0].vram_percent||0);
+        vramUsed = ((d.gpus[0].vram_used||0)/1024/1024/1024).toFixed(1);
+        vramTotal = ((d.gpus[0].vram_total||0)/1024/1024/1024).toFixed(1);
+      }
       const C = window.__aboutCharts; if (!C) return;
       updateChartSmooth(C.cpu, cpuP);
       updateChartSmooth(C.mem, memP);
@@ -49,6 +61,16 @@
       const cpuProg = qs('cpu-progress'); if(cpuProg) cpuProg.style.width = cpuP+'%';
       const cpuLbl = qs('cpu-percent'); if(cpuLbl) cpuLbl.textContent = cpuP+'%';
       const memProg = qs('mem-progress'); if(memProg) memProg.style.width = memP+'%';
+      const memLbl = qs('mem-percent');
+      if (memLbl && d.mem_used!=null && d.mem_total!=null){
+        const memUsed = ((d.mem_used||0)/1024/1024/1024).toFixed(1);
+        const memTot = ((d.mem_total||0)/1024/1024/1024).toFixed(1);
+        memLbl.textContent = `${memUsed}GB / ${memTot}GB`;
+      }
+      const gpuProg = qs('gpu-progress'); if(gpuProg) gpuProg.style.width = gpuP+'%';
+      const gpuLbl = qs('gpu-percent'); if(gpuLbl) gpuLbl.textContent = gpuP+'%';
+      const vramProg = qs('vram-progress'); if(vramProg) vramProg.style.width = vramP+'%';
+      const vramLbl = qs('vram-percent'); if(vramLbl && (vramUsed||vramTotal)) vramLbl.textContent = `${vramUsed}GB / ${vramTotal}GB`;
     }catch(e){ /* silent */ }
   }
 
@@ -57,10 +79,15 @@
     if (window.__aboutCharts) return; // already
     await ensureChartJS();
     try{
-      const cpu = makeLineChart(qs('cpu-chart').getContext('2d'), '#2563eb');
-      const mem = makeLineChart(qs('mem-chart').getContext('2d'), '#16a34a');
-      const gpu = makeLineChart(qs('gpu-chart').getContext('2d'), '#f59e0b');
-      const vram = makeLineChart(qs('vram-chart').getContext('2d'), '#06b6d4');
+      const cpuCtx = qs('cpu-chart').getContext('2d');
+      const memCtx = qs('mem-chart').getContext('2d');
+      const gpuCtx = qs('gpu-chart').getContext('2d');
+      const vramCtx = qs('vram-chart').getContext('2d');
+      // 기존 차트 재사용/정리 후 생성
+      const cpu = (Chart.getChart && Chart.getChart(cpuCtx.canvas)) || makeLineChart(cpuCtx, '#2563eb');
+      const mem = (Chart.getChart && Chart.getChart(memCtx.canvas)) || makeLineChart(memCtx, '#16a34a');
+      const gpu = (Chart.getChart && Chart.getChart(gpuCtx.canvas)) || makeLineChart(gpuCtx, '#f59e0b');
+      const vram = (Chart.getChart && Chart.getChart(vramCtx.canvas)) || makeLineChart(vramCtx, '#06b6d4');
       window.__aboutCharts = { cpu, mem, gpu, vram };
       window.__aboutTimer = setInterval(updateSystemMetrics, 2000);
       updateSystemMetrics();
@@ -79,4 +106,10 @@
 
   on(document, 'turbo:render', setup);
   on(document, 'turbo:before-cache', teardown);
+  // 초기 로드 또는 Turbo 미사용 시에도 동작하도록 즉시 시도
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setup();
+  } else {
+    document.addEventListener('DOMContentLoaded', setup, { once: true });
+  }
 })();

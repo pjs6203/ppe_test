@@ -56,7 +56,8 @@
   const color = overlay.getAttribute('data-color') || '#000714';
   const duration = parseInt(overlay.getAttribute('data-duration')||'520',10);
   const wantGL = (overlay.getAttribute('data-webgl') || '1') !== '0';
-  const simple = (overlay.getAttribute('data-simple') || '0') === '1';
+  // 강제로 블러 전환(Simple)만 사용
+  const simple = true;
 
     // Canvas setup (low-res for perf, scaled up for stylized look)
     // Simple CSS mode: no canvas, just overlay fade
@@ -70,7 +71,9 @@
           document.body.classList.add('pagefxing');
           showOverlay(true);
           // use CSS transition timing (~duration)
-          setTimeout(()=>resolve(), duration);
+          setTimeout(()=>{
+            resolve();
+          }, duration);
         });
       }
       function playIntro(){
@@ -86,7 +89,9 @@
   const api = {
         bindAnchors: function(){ if (window.Turbo) return; /* no-op when Turbo */ },
         playIntro,
-        cover: ()=>animateCover(true),
+        cover: ()=>animateCover(true).then(()=>{
+          // keep overlay shown during cover; click should be blocked only during cover
+        }),
         reveal: ()=>{
           return new Promise(resolve=>{
             overlay.classList.remove('show');
@@ -96,8 +101,7 @@
           });
         }
   };
-  // Turbo fallback: always reveal on turbo:load
-  document.addEventListener('turbo:load', ()=>{ api.reveal && api.reveal(); });
+  // Turbo 환경에서는 partial-transitions가 reveal을 호출하므로 별도 바인딩 생략
   return api;
     }
 
@@ -326,8 +330,7 @@
         });
       }
   };
-  // Turbo fallback: always reveal on turbo:load
-  document.addEventListener('turbo:load', ()=>{ api.reveal && api.reveal(); });
+  // Turbo 환경에서는 partial-transitions가 reveal을 호출하므로 별도 바인딩 생략
   return api;
   }
 

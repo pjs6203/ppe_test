@@ -18,6 +18,15 @@ body.login-body{
   min-height: 100vh;
 }
 
+/* About page needs scrolling; override the global overflow */
+body.login-body.about-body{
+  overflow: auto;
+}
+
+.about-body .main-container{
+  padding-bottom: 3rem;
+}
+
 /* Global font & typography */
 html, body, button, input, select, textarea {
   font-family: 'Pretendard Variable', 'Pretendard', system-ui, -apple-system, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Nanum Gothic', sans-serif;
@@ -106,3 +115,6 @@ body.pagefxing .login-card {
   transform: scale(0.997);
   opacity: 0.96;
 }
+
+/* Hide Turbo Drive's top progress bar globally */
+.turbo-progress-bar{ display: none !important; opacity: 0 !important; }
