@@ -839,6 +839,9 @@
               showGuide('작업자 미감지', '카메라 정면에 서고, 프레임 안에 위치해 주세요.', ['person']);
               alertSec.style.display = 'none';
               guideGrid.hidden = true;
+              // reset sustained-wear timers so next detection requires fresh confirmation
+              Object.keys(presentSince).forEach(k=> presentSince[k] = 0);
+              clearTimeout(safeToastTimer); safeToastTimer = null;
               return;
             }
 
