@@ -4,3 +4,8 @@
 /* ensure content sits above the mesh */
 .mesh-on { position: relative; z-index: 2; }
 @media (prefers-reduced-motion: reduce) { #mesh-canvas { display: none; } }
+
+/* Global page transition overlay styles */
+#page-transition { position: fixed; inset: 0; background: rgba(0,0,0,0.35); backdrop-filter: blur(6px); z-index: 9999; opacity: 0; pointer-events: none; transition: opacity .25s ease; }
+#page-transition.show { opacity: 1; pointer-events: auto; }
+#page-transition .spinner-border { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #60a5fa; }

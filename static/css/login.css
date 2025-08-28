@@ -93,3 +93,16 @@ h1,h2,h3,h4,h5,h6{ font-weight:700; }
 
 /* small utility to ensure cards don't force page height */
 .panel-content { max-height: calc(100vh - 220px); overflow:auto; }
+
+/* Softer page transitions: gently blur/scale content while overlay animates */
+.navbar, .main-container, main, .login-card {
+  transition: transform .35s ease, filter .35s ease, opacity .35s ease;
+}
+body.pagefxing .navbar,
+body.pagefxing .main-container,
+body.pagefxing main,
+body.pagefxing .login-card {
+  filter: blur(1px) saturate(0.98);
+  transform: scale(0.997);
+  opacity: 0.96;
+}
