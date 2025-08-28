@@ -9,10 +9,15 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body class="login-body">
+  <!-- Interactive canvas mesh background -->
+  <div id="auth-bg" aria-hidden="true">
+    <canvas id="mesh-canvas"></canvas>
+  </div>
+
   <main class="d-flex align-items-center justify-content-center min-vh-100">
     <div class="card login-card p-4">
       <div class="d-flex align-items-center mb-3">
-        <div class="logo d-flex align-items-center justify-content-center me-3" style="width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-weight:700;">P</div>
+        <div class="logo d-flex align-items-center justify-content-center me-3">P</div>
         <div>
           <h4 class="mb-0">PPE 감지 시스템</h4>
           <small class="d-block">모니터링을 위해 로그인하세요</small>
@@ -27,34 +32,187 @@
         {% endif %}
       {% endwith %}
 
-      <form method="post">
-        <div class="mb-3 position-relative">
-          <label class="form-label small">사용자</label>
-          <input name="username" class="form-control form-control-lg" value="{{ request.form.username or '' }}" required>
+      <form method="post" class="gx-2 gy-2">
+        <div class="row align-items-center mb-3">
+          <label class="col-auto col-form-label text-muted mb-0">사용자</label>
+          <div class="col">
+            <input name="username" class="form-control form-control-lg" value="{{ request.form.username or '' }}" required>
+          </div>
         </div>
-        <div class="mb-3 position-relative">
-          <label class="form-label small">비밀번호</label>
-          <input id="pwd" type="password" name="password" class="form-control form-control-lg" required>
+
+        <div class="row align-items-center mb-3 position-relative">
+          <label class="col-auto col-form-label text-muted mb-0">비밀번호</label>
+          <div class="col">
+            <input id="pwd" type="password" name="password" class="form-control form-control-lg" required>
+          </div>
           <button type="button" class="btn-icon" id="pwd-toggle" aria-label="비밀번호 표시" title="비밀번호 표시">
             <i class="fa fa-eye"></i>
           </button>
         </div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
+
+        <div class="d-flex justify-content-between align-items-center mb-2 mt-2">
           <div class="small-help">아이디/비밀번호는 서버 환경변수로 변경 가능</div>
           <button class="btn btn-primary">로그인</button>
         </div>
-        <div class="footer-note">© 2025 PPE 감지 시스템</div>
       </form>
     </div>
   </main>
 
   <script>
+    // password toggle
     document.getElementById('pwd-toggle').addEventListener('click', function(){
       const i = this.querySelector('i');
       const p = document.getElementById('pwd');
       if (p.type === 'password') { p.type = 'text'; i.classList.remove('fa-eye'); i.classList.add('fa-eye-slash'); }
       else { p.type = 'password'; i.classList.remove('fa-eye-slash'); i.classList.add('fa-eye'); }
     });
+
+    // canvas mesh background (interactive)
+    (function(){
+      const canvas = document.getElementById('mesh-canvas');
+      const ctx = canvas.getContext('2d');
+      let width = 0, height = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
+
+      // params
+      const cellW = 140; // horizontal spacing
+      const cellH = 90;  // vertical spacing
+      const jitter = 30; // random offset for points
+      const lineColor = 'rgba(88,192,255,'; // base for stroke alpha
+      const nodeColor = 'rgba(180,230,255,';
+      const maxConn = 6; // nearest neighbors
+
+      let points = [];
+      let mouse = {x: -9999, y: -9999};
+
+      function resize(){
+        width = canvas.clientWidth = document.documentElement.clientWidth * 1.2; // a bit larger for parallax
+        height = canvas.clientHeight = document.documentElement.clientHeight * 1.2;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        ctx.setTransform(dpr,0,0,dpr,0,0);
+        buildPoints();
+      }
+
+      function buildPoints(){
+        points = [];
+        const cols = Math.ceil(width / cellW) + 1;
+        const rows = Math.ceil(height / cellH) + 1;
+        for (let r=0;r<rows;r++){
+          for (let c=0;c<cols;c++){
+            const ox = c*cellW + ((r%2)?cellW/2:0);
+            const oy = r*cellH;
+            const px = ox + (Math.random()*2-1)*jitter;
+            const py = oy + (Math.random()*2-1)*jitter;
+            points.push({x:px,y:py,ox:px,oy:py,vx:0,vy:0,neighbors:[]});
+          }
+        }
+        // compute neighbors (brute force acceptable for small grids)
+        for (let i=0;i<points.length;i++){
+          const p = points[i];
+          // find nearest by distance
+          const dists = [];
+          for (let j=0;j<points.length;j++){
+            if (i===j) continue;
+            const q=points[j];
+            const dx=p.x-q.x, dy=p.y-q.y;
+            dists.push({idx:j,dist:dx*dx+dy*dy});
+          }
+          dists.sort((a,b)=>a.dist-b.dist);
+          p.neighbors = dists.slice(0,maxConn).map(d=>d.idx);
+        }
+      }
+
+      function update(dt){
+        // mouse influence
+        for (let i=0;i<points.length;i++){
+          const p = points[i];
+          const dx = (mouse.x - p.x);
+          const dy = (mouse.y - p.y);
+          const dist2 = dx*dx+dy*dy + 0.001;
+          const influence = Math.max(0, 1 - Math.sqrt(dist2)/400);
+          // pull slightly toward/away from mouse for dynamic effect
+          p.vx += (p.ox - p.x)*0.02 + (dx/dist2)*20*influence;
+          p.vy += (p.oy - p.y)*0.02 + (dy/dist2)*20*influence;
+          // damping
+          p.vx *= 0.85; p.vy *= 0.85;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+      }
+
+      function draw(){
+        ctx.clearRect(0,0,width,height);
+        // subtle radial gradient background
+        const g = ctx.createRadialGradient(width*0.2,height*0.2,50,width*0.6,height*0.6,Math.max(width,height));
+        g.addColorStop(0,'#00121b');
+        g.addColorStop(1,'#000814');
+        ctx.fillStyle = g;
+        ctx.fillRect(0,0,width,height);
+
+        // draw lines
+        for (let i=0;i<points.length;i++){
+          const p = points[i];
+          const px = p.x, py = p.y;
+          for (let k=0;k<p.neighbors.length;k++){
+            const q = points[p.neighbors[k]];
+            const dx = px - q.x, dy = py - q.y;
+            const dist = Math.sqrt(dx*dx+dy*dy);
+            const alpha = Math.max(0, 0.12 - (dist/1000));
+            if (alpha<=0) continue;
+            ctx.beginPath();
+            ctx.moveTo(px,py);
+            ctx.lineTo(q.x,q.y);
+            ctx.strokeStyle = lineColor + (alpha*1.2) + ')';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
+        }
+
+        // draw nodes
+        for (let i=0;i<points.length;i++){
+          const p = points[i];
+          const dx = mouse.x - p.x, dy = mouse.y - p.y;
+          const dist = Math.sqrt(dx*dx+dy*dy);
+          const alpha = Math.max(0, 0.25 - dist/1200);
+          if (alpha>0.02){
+            ctx.beginPath();
+            ctx.arc(p.x,p.y,2.2,0,Math.PI*2);
+            ctx.fillStyle = nodeColor + (Math.min(alpha,0.9)) + ')';
+            ctx.fill();
+          }
+        }
+      }
+
+      let last = performance.now();
+      function loop(now){
+        const dt = Math.min(1, (now-last)/16); // normalized
+        last = now;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      // mouse handlers
+      function onMove(e){
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = (e.clientX - rect.left) * (canvas.width/canvas.clientWidth) / dpr;
+        mouse.y = (e.clientY - rect.top) * (canvas.height/canvas.clientHeight) / dpr;
+      }
+      function onLeave(){ mouse.x = -9999; mouse.y = -9999; }
+
+      window.addEventListener('resize', resize);
+      canvas.addEventListener('mousemove', onMove);
+      canvas.addEventListener('mouseleave', onLeave);
+      // also listen on document so motion is responsive even outside canvas
+      document.addEventListener('mousemove', onMove);
+
+      // initialize
+      resize();
+      requestAnimationFrame(loop);
+
+    })();
   </script>
 </body>
 </html>

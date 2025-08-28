@@ -24,6 +24,10 @@ from io import BytesIO
 from glob import glob
 import traceback
 import json
+try:
+    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+except Exception:
+    pass
 
 # -----------------------------
 # 기본 설정
@@ -54,7 +58,7 @@ CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
 
 def load_config():
     """Load settings from CONFIG_PATH and apply to globals."""
-    global TARGET_W, TARGET_H, TARGET_FPS, REQUIRED_PPE, requested_model_path, ADMIN_USER, ADMIN_PASS_HASH
+    global TARGET_W, TARGET_H, TARGET_FPS, REQUIRED_PPE, requested_model_path, ADMIN_USER, ADMIN_PASS_HASH, CAM_INDEX
     if not os.path.isfile(CONFIG_PATH):
         return {}
     try:
@@ -71,6 +75,8 @@ def load_config():
             TARGET_H = int(cfg['height'])
         if 'fps' in cfg and isinstance(cfg['fps'], int):
             TARGET_FPS = int(cfg['fps'])
+        if 'cam_index' in cfg and isinstance(cfg['cam_index'], int):
+            CAM_INDEX = int(cfg['cam_index'])
         if 'ppe' in cfg and isinstance(cfg['ppe'], list):
             REQUIRED_PPE = [s.strip().lower() for s in cfg['ppe'] if isinstance(s, str) and s.strip()]
         if 'model' in cfg and cfg['model']:
@@ -103,6 +109,7 @@ def get_settings_dict() -> dict:
         "width": TARGET_W,
         "height": TARGET_H,
         "fps": TARGET_FPS,
+    "cam_index": CAM_INDEX,
         "model": requested_model_path,
         "ppe": REQUIRED_PPE,
         "admin_user": ADMIN_USER,
@@ -129,6 +136,7 @@ requested_model_path: Optional[str] = None   # 사용자가 선택한 경로
 loaded_model_path: Optional[str] = None      # 현재 메모리에 올라간 경로
 reload_event = threading.Event()
 last_model_error: Optional[str] = None
+camera_names_cache = {"ts": 0.0, "names": []}
 
 def list_weight_files() -> List[str]:
     files = sorted(glob(os.path.join(WEIGHTS_DIR, "*.pt")))
@@ -538,6 +546,12 @@ def yolo_inference_loop():
             traceback.print_exc()
 
     retry = 0
+    # event to allow camera switching at runtime
+    global cam_change_event
+    try:
+        cam_change_event
+    except NameError:
+        cam_change_event = threading.Event()
     while True:
         cap = open_camera(CAM_INDEX)
         if not cap.isOpened():
@@ -573,6 +587,11 @@ def yolo_inference_loop():
                         traceback.print_exc()
                     finally:
                         reload_event.clear()
+
+                # camera switch request
+                if cam_change_event.is_set():
+                    cam_change_event.clear()
+                    break  # break inner loop to reopen with new CAM_INDEX
 
                 ret, frame = cap.read()
                 if not ret:
@@ -729,6 +748,13 @@ def api_settings():
         cfg['width'] = w; cfg['height'] = h; cfg['fps'] = fps
     except Exception:
         return jsonify({'ok': False, 'error': 'Invalid numeric fields'}), 400
+    # camera index (optional)
+    try:
+        if 'cam_index' in data and data.get('cam_index') is not None:
+            ci = int(data.get('cam_index'))
+            cfg['cam_index'] = ci
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Invalid camera index'}), 400
     model = data.get('model')
     if model:
         if not os.path.isabs(model):
@@ -761,6 +787,18 @@ def api_settings():
 
     # apply immediately
     load_config()
+    # trigger camera reopen if cam_index changed
+    try:
+        if 'cam_index' in cfg:
+            cam_change_event.set()
+    except Exception:
+        pass
+    # trigger model reload if changed
+    try:
+        if 'model' in cfg and requested_model_path and requested_model_path != loaded_model_path:
+            reload_event.set()
+    except Exception:
+        pass
     return jsonify({'ok': True, 'saved': cfg})
 
 
@@ -842,7 +880,92 @@ def api_select_model():
 
     requested_model_path = path
     reload_event.set()
+    # persist this selection so it becomes the default on next startup
+    try:
+        existing = {}
+        if os.path.isfile(CONFIG_PATH):
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+        existing['model'] = requested_model_path
+        save_config(existing)
+    except Exception:
+        pass
     return jsonify({"ok": True, "requested": requested_model_path})
+
+# ---- 카메라 목록 API ----
+def _probe_camera(index: int) -> bool:
+    if os.name == "nt":
+        for api in (cv2.CAP_MSMF, cv2.CAP_DSHOW, cv2.CAP_ANY):
+            cap = cv2.VideoCapture(index, api)
+            if cap.isOpened():
+                try: cap.release()
+                except Exception: pass
+                return True
+        return False
+    else:
+        cap = cv2.VideoCapture(index)
+        ok = cap.isOpened()
+        try: cap.release()
+        except Exception: pass
+        return ok
+
+@app.route('/api/cameras')
+@login_required
+def api_cameras():
+    # Windows: use PnP names and map to indices without heavy probing
+    if os.name == 'nt':
+        names: List[str] = []
+        # simple cache for 10 seconds
+        now = time.time()
+        if (now - camera_names_cache.get("ts", 0)) < 10 and camera_names_cache.get("names"):
+            names = list(camera_names_cache.get("names", []))
+        else:
+            try:
+                ps_cmd = [
+                    'powershell', '-NoProfile', '-Command',
+                    "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Service -eq 'usbvideo' } | Select-Object -ExpandProperty Name"
+                ]
+                out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=1)
+                names = [line.strip() for line in out.splitlines() if line.strip()]
+                camera_names_cache["ts"] = now
+                camera_names_cache["names"] = list(names)
+            except Exception:
+                names = []
+        count = max(1, len(names))
+        cams = [{"index": i, "name": f"Camera {i}" + (f" - {names[i]}" if i < len(names) else "")} for i in range(count)]
+        return jsonify({"cameras": cams, "selected": CAM_INDEX})
+
+    # Other OS: lightly probe a few indices
+    probed = []
+    for i in range(3):
+        try:
+            cap = cv2.VideoCapture(i)
+            ok = cap.isOpened()
+            try: cap.release()
+            except Exception: pass
+            if ok:
+                probed.append(i)
+        except Exception:
+            continue
+    cams = [{"index": i, "name": f"Camera {i}"} for i in probed]
+    return jsonify({"cameras": cams, "selected": CAM_INDEX})
+
+@app.route('/api/change_password', methods=['POST'])
+@login_required
+def api_change_password():
+    data = request.get_json(silent=True) or {}
+    current = str(data.get('current') or '')
+    new = str(data.get('new') or '')
+    if not current or not new:
+        return jsonify({'ok': False, 'error': '현재/새 비밀번호가 필요합니다'}), 400
+    if not check_password_hash(ADMIN_PASS_HASH, current):
+        return jsonify({'ok': False, 'error': '현재 비밀번호가 올바르지 않습니다'}), 403
+    # persist new password hash
+    cfg = { 'admin_pass_hash': generate_password_hash(new), 'admin_user': ADMIN_USER }
+    if not save_config(cfg):
+        return jsonify({'ok': False, 'error': '비밀번호 저장 실패'}), 500
+    load_config()
+    return jsonify({'ok': True})
 
 # Note: login/logout and protected routes defined earlier to avoid duplication.
 
@@ -864,6 +987,9 @@ if __name__ == "__main__":
     cfg = load_config()
     if cfg:
         print(f"[CONFIG] Loaded config: {cfg}")
+    ensure_default_model_selected()
+    if requested_model_path:
+        print(f"[MODEL] Requested at startup: {requested_model_path}")
 
     threading.Thread(target=yolo_inference_loop, daemon=True).start()
     print("✅ YOLO 추론 스레드 시작됨")

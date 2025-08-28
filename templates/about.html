@@ -13,82 +13,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Shared styles to align with settings page -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mesh.css') }}">
   
   <style>
-    :root {
-      --primary-color: #3b82f6;
-      --success-color: #10b981;
-      --warning-color: #f59e0b;
-      --danger-color: #ef4444;
-      --dark-bg: #0f172a;
-      --card-bg: #1e293b;
-      --border-color: #475569;
-      --text-primary: #ffffff;
-      --text-secondary: #e2e8f0;
-      --text-muted: #94a3b8;
-    }
+    .main-container { padding: 2rem 0; }
+    /* Make cards match the settings page login-card look */
+    .card { background: rgba(6,14,25,0.85); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; color: #f8fafc; box-shadow: 0 18px 60px rgba(2,6,23,0.35); backdrop-filter: blur(6px); margin-bottom: 2rem; }
+    .card-header { background: transparent; border: 0; padding: 1rem 1.25rem; }
+    .card-header h5 { color: #f8fafc; font-weight: 600; font-size: 1.1rem; }
+    .card-body { padding: 1.25rem; }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      color: var(--text-primary);
-      min-height: 100vh;
-      font-weight: 400;
-      line-height: 1.6;
-    }
-
-    .navbar {
-      background: rgba(15, 23, 42, 0.98) !important;
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.5rem;
-      color: var(--primary-color) !important;
-    }
-
-    .main-container {
-      padding: 2rem 0;
-    }
-
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      margin-bottom: 2rem;
-    }
-
-    .card-header {
-      background: rgba(30, 41, 59, 0.9);
-      border-bottom: 1px solid var(--border-color);
-      border-radius: 16px 16px 0 0 !important;
-      padding: 1.5rem;
-    }
-
-    .card-header h5 {
-      color: var(--text-primary);
-      font-weight: 600;
-      font-size: 1.1rem;
-    }
-
-    .card-body {
-      padding: 1.5rem;
-    }
-
-    .table {
-      color: var(--text-primary);
-      background: transparent;
-    }
+  .table { color: #f8fafc; background: transparent; }
     
     .table-borderless {
       background: rgba(30, 41, 59, 0.3);
@@ -96,24 +33,11 @@
       overflow: hidden;
     }
 
-    .table th {
-      border-color: var(--border-color);
-      color: var(--text-secondary);
-      font-weight: 600;
-      font-size: 0.9rem;
-    }
+  .table th { border-color: rgba(255,255,255,0.08); color: #cbd5e1; font-weight: 600; font-size: 0.9rem; }
 
-    .table td {
-      border-color: var(--border-color);
-      color: var(--text-primary);
-      font-weight: 500;
-    }
+  .table td { border-color: rgba(255,255,255,0.08); color: #f8fafc; font-weight: 500; }
 
-    .progress {
-      background: rgba(30, 41, 59, 0.7);
-      border-radius: 8px;
-      height: 8px;
-    }
+  .progress { background: rgba(6,14,25,0.6); border-radius: 8px; height: 8px; }
 
     .progress-bar {
       border-radius: 8px;
@@ -126,14 +50,7 @@
       margin-top: 1rem;
     }
 
-    .metric-card {
-      background: rgba(30, 41, 59, 0.7);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 1.5rem;
-      text-align: center;
-      transition: all 0.3s ease;
-    }
+  .metric-card { background: rgba(6,14,25,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 1.5rem; text-align: center; transition: all 0.3s ease; }
 
     .metric-card:hover {
       transform: translateY(-2px);
@@ -210,18 +127,7 @@
       transition: width 0.3s ease;
     }
 
-    .version-badge {
-      display: inline-block;
-      background: rgba(30, 41, 59, 0.8);
-      color: #93c5fd;
-      padding: 0.4rem 1rem;
-      border-radius: 8px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      border: 1px solid rgba(59, 130, 246, 0.5);
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
+  .version-badge { display: inline-block; background: rgba(6,14,25,0.7); color: #93c5fd; padding: 0.4rem 1rem; border-radius: 8px; font-size: 0.9rem; font-weight: 600; border: 1px solid rgba(59, 130, 246, 0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.5); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
     .status-indicator {
       width: 8px;
@@ -246,53 +152,17 @@
       box-shadow: 0 0 8px var(--danger-color);
     }
 
-    .btn-primary {
-      background: var(--primary-color);
-      border: none;
-      border-radius: 8px;
-      padding: 0.5rem 1rem;
-      font-weight: 500;
-      transition: all 0.3s ease;
-      color: white;
-    }
+  .btn-primary { background: #2563eb; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 500; transition: all 0.3s ease; color: white; }
+  .btn-primary:hover { background: #1d4ed8; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(59,130,246,0.3); }
 
-    .btn-primary:hover {
-      background: #2563eb;
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
-    }
+  .nav-link { color: #cbd5e1; transition: all 0.3s ease; font-weight: 500; font-size: 1.05rem; }
+  .nav-link:hover { color: #2563eb; }
+  .nav-link.active { color: #2563eb; background: rgba(59,130,246,0.1); }
 
-    .nav-link {
-      color: var(--text-secondary);
-      transition: all 0.3s ease;
-      font-weight: 500;
-      font-size: 1.05rem; /* increased for better readability */
-    }
-
-    .nav-link:hover {
-      color: var(--primary-color);
-    }
-
-    .nav-link.active {
-      color: var(--primary-color);
-      background: rgba(59, 130, 246, 0.1);
-    }
-
-    /* 텍스트 가독성 개선 */
-    h1, h2, h3, h4, h5, h6 {
-      color: var(--text-primary);
-      font-weight: 600;
-    }
-
-    .text-muted {
-      color: var(--text-muted) !important;
-      font-weight: 500;
-    }
-
-    .small {
-      color: var(--text-secondary);
-      font-weight: 500;
-    }
+  /* 텍스트 가독성 개선 */
+  h1, h2, h3, h4, h5, h6 { color: #f8fafc; font-weight: 600; }
+  .text-muted { color: #9aa7b8 !important; font-weight: 500; }
+  .small { color: #cbd5e1; font-weight: 500; }
 
     /* 테이블 텍스트 개선 */
     .table-borderless td {
@@ -310,20 +180,10 @@
       border-right: 1px solid rgba(71, 85, 105, 0.3);
     }
     
-    .table-borderless tr:hover {
-      background: rgba(59, 130, 246, 0.05);
-    }
+  .table-borderless tr:hover { background: rgba(59,130,246,0.05); }
 
     /* 섹션 제목 스타일 */
-    .section-title {
-      color: var(--text-primary);
-      font-weight: 600;
-      font-size: 1.1rem;
-      border-bottom: 2px solid rgba(59, 130, 246, 0.4);
-      padding-bottom: 0.75rem;
-      margin-bottom: 1.5rem;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    }
+  .section-title { color: #f8fafc; font-weight: 600; font-size: 1.1rem; border-bottom: 2px solid rgba(59,130,246,0.4); padding-bottom: 0.75rem; margin-bottom: 1.5rem; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
     
          /* GPU 정보 텍스트 개선 */
      .gpu-memory .small {
@@ -354,7 +214,13 @@
     }
   </style>
 </head>
-<body>
+<body class="login-body">
+  <!-- Mesh background -->
+  <div id="auth-bg"><canvas id="mesh-canvas"></canvas></div>
+  <div id="page-transition" style="position:fixed; inset:0; background:rgba(0,0,0,0.35); backdrop-filter: blur(6px); z-index:9999; opacity:0; pointer-events:none; transition: opacity .25s ease;">
+    <div class="spinner-border" role="status" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#60a5fa;"><span class="visually-hidden">Loading...</span></div>
+  </div>
+
   <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container-fluid">
@@ -565,7 +431,11 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
+  <script src="{{ url_for('static', filename='js/mesh-bg.js') }}"></script>
+  <script>
+    // init mesh background
+    setTimeout(()=>{ if (typeof initMesh === 'function') initMesh('mesh-canvas'); }, 250);
+  </script>
   <script>
     // 차트 설정
     const chartOptions = {
@@ -831,6 +701,15 @@
        if (document.hidden) {
          saveChartData();
        }
+     });
+     // Smooth page transitions
+     window.addEventListener('beforeunload', ()=>{
+       const overlay = document.getElementById('page-transition');
+       if(overlay) overlay.style.opacity = '1', overlay.style.pointerEvents = 'auto';
+     });
+     window.addEventListener('pageshow', ()=>{
+       const overlay = document.getElementById('page-transition');
+       if(overlay) overlay.style.opacity = '0', overlay.style.pointerEvents = 'none';
      });
   </script>
 </body>

@@ -1,42 +1,95 @@
+/* Load Pretendard (variable) */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css');
+
+/* base variables */
 :root{
-  --bg-dark: #051029;
-  --card-bg: #071427;
+  --bg-dark: #000814;
+  --card-bg: rgba(6,14,25,0.85);
   --muted: #9aa7b8;
   --accent: #2563eb;
   --text: #f8fafc;
 }
 
 body.login-body{
-  background: radial-gradient(1200px 600px at 10% 10%, rgba(59,130,246,0.08), transparent),
-              linear-gradient(180deg, var(--bg-dark), #031025 140%);
-  color: var(--text);
-}
-
-.login-card{
-  width: 420px;
-  border-radius: 12px;
+  position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
-  border: 1px solid rgba(255,255,255,0.08);
+  background: #000814; /* dark base */
   color: var(--text);
+  min-height: 100vh;
 }
 
-.login-card .logo{ color: var(--accent); }
+/* Global font & typography */
+html, body, button, input, select, textarea {
+  font-family: 'Pretendard Variable', 'Pretendard', system-ui, -apple-system, 'Segoe UI', Roboto, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Nanum Gothic', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+h1,h2,h3,h4,h5,h6{ font-weight:700; }
+.text-muted{ color:#cbd5e1 !important; }
+
+/* canvas background */
+#auth-bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+#mesh-canvas { width: 100%; height: 100%; display: block; transform: none; filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6)); }
+
+/* ensure any video/image inside the video-container never overflows */
+.video-container img, .video-container video, .video-container canvas {
+  max-width: 100%;
+  max-height: 70vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.login-card{ width: 480px; border-radius: 12px; overflow: hidden; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.04); color: var(--text); position: relative; z-index: 2; box-shadow: 0 18px 60px rgba(2,6,23,0.7); }
+
+.login-card .logo{ width:52px;height:52px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#60a5fa);color:#fff;font-weight:700; display:flex; align-items:center; justify-content:center; font-size:1.25rem; }
 .login-card h4{ font-weight:700; color: var(--text); }
 .login-card small{ color: var(--muted); }
 
-.btn-icon{
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  background: transparent; border: none; color: var(--muted); opacity:0.95
-}
+.btn-icon{ position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.02); border: none; color: var(--muted); padding: 6px; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display:flex; align-items:center; justify-content:center; z-index: 3; }
 
-.form-control-lg{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text); }
+.form-control-lg{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: var(--text); padding: 12px 14px 12px 14px; padding-right: 56px; }
 .form-control-lg::placeholder{ color: #9fb1c8; }
-.form-control-lg:focus{ box-shadow: 0 8px 28px rgba(37,99,235,0.18); border-color: var(--accent); outline: 3px solid rgba(37,99,235,0.08); }
+.form-control-lg:focus{ box-shadow: 0 8px 28px rgba(37,99,235,0.18); border-color: var(--accent); outline: 3px solid rgba(37,99,235,0.06); }
+
+/* Dark form controls (settings page readability) */
+.form-control, .form-select{
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: var(--text);
+}
+.form-control::placeholder{ color:#9fb1c8; }
+.form-control:focus, .form-select:focus{
+  border-color: var(--accent);
+  box-shadow: 0 0 0 0.2rem rgba(37,99,235,0.25);
+}
+.form-check-label{ color: var(--text); }
+.form-check-input{ background-color: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.22); accent-color: var(--accent); }
+.form-check-input:focus{ box-shadow: 0 0 0 0.15rem rgba(37,99,235,0.35); border-color: var(--accent); }
 
 .alert{ background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #ffdede; }
 
 .small-help{ color: var(--muted); }
-.footer-note{ color: var(--muted); font-size:0.78rem; margin-top:10px; text-align:center; }
 
-@media (max-width: 480px){ .login-card{ width: 92%; } .btn-icon{ top:48px; } }
+/* inline label layout */
+.row.align-items-center > label.col-form-label{ width: 86px; text-align: left; padding-right: 8px; color: #f8fafc; font-weight:600; }
+
+/* make inputs and labels aligned on mobile */
+@media (max-width: 520px){ .login-card{ width: 92%; padding:16px; } .row.align-items-center{ display:block; } .row.align-items-center > label.col-form-label{ width:100%; margin-bottom:6px; } .btn-icon{ top:12px; right:12px; width:32px; height:32px; } }
+
+@media (prefers-reduced-motion: reduce){ #mesh-canvas{ display:none; }}
+
+/* settings wrapper to center content like login page */
+.settings-wrapper{
+  max-width: 1100px;
+  margin: 2.4rem auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* make .login-card slightly more flexible for panels */
+.login-card{ padding: 1.25rem; }
+
+/* small utility to ensure cards don't force page height */
+.panel-content { max-height: calc(100vh - 220px); overflow:auto; }

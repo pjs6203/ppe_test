@@ -7,54 +7,29 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- shared styles: login-card, mesh background, and utilities -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mesh.css') }}">
   <style>
-    :root {
-      --primary-color: #3b82f6;
-      --border-color: #475569;
-      --card-bg: #1e293b;
-      --text-primary: #ffffff;
-      --text-muted: #94a3b8;
-    }
-    body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg,#0f172a,#1e293b); color: var(--text-primary); }
-    .navbar { background: rgba(15,23,42,0.98); border-bottom:1px solid var(--border-color) }
-    .card { background: rgba(30,41,59,0.8); border:1px solid var(--border-color) }
-    .version-badge { background: rgba(30,41,59,0.6); color: #93c5fd }
-    .form-label { color: #cbd5e1 }
-    .form-control, .form-select { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); color:var(--text-primary) }
-  /* Ensure dropdown options are readable on dark theme */
-  .form-select, .form-select:focus { color: #e6eef8; background: rgba(14,20,30,0.96); }
-  .form-select option { background: rgba(14,20,30,0.96); color: #e6eef8; }
-  /* For better contrast in Windows native dropdowns */
-  select.form-select::-ms-expand { filter: invert(1); }
-    .form-check-label { color:#cbd5e1 }
-    .btn-outline-light { border-color: rgba(255,255,255,0.06); }
-    /* Navbar brand to match other pages */
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.5rem;
-      color: var(--primary-color) !important;
-    }
-    /* Page header styles and nav to match about/webcam exactly */
+    /* minimal overrides kept local */
+    :root{ --primary-color: #3b82f6; }
     .main-container { padding: 2rem 0; }
-    .nav-link {
-      color: var(--text-secondary);
-      transition: all 0.3s ease;
-      font-weight: 500;
-      font-size: 1.05rem; /* match other templates */
-    }
-    .nav-link:hover { color: var(--primary-color); }
-    .nav-link.active { color: var(--primary-color); background: rgba(59,130,246,0.1); }
-    .main-container h1.h2 {
-      font-size: 1.75rem; /* match about's h2 size visually */
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: 0.5rem;
-    }
-    .main-container p.text-muted { color: var(--text-muted) !important; font-weight: 500; }
-    .main-container .fa-cogs { font-size: 1.6rem; margin-right: 0.5rem; opacity: 0.95; }
+  /* Ensure dropdown menus readable on dark */
+  .dropdown-menu, .dropdown-menu .dropdown-item{ background: rgba(6,14,25,0.98); color:#f8fafc; }
+  .form-select option{ color:#0b1220; background:#e5e7eb; } /* opened native list */
+  /* Inline label widths (consistent) */
+  .col-form-label{ color:#f8fafc; font-weight:600; min-width: 86px; }
+  /* Page transition overlay */
+  #page-transition{ position:fixed; inset:0; background:rgba(0,0,0,0.35); backdrop-filter: blur(6px); z-index:9999; opacity:0; pointer-events:none; transition: opacity .25s ease; }
+  #page-transition.show{ opacity:1; pointer-events:auto; }
+  #page-transition .spinner-border{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); color:#60a5fa; }
   </style>
 </head>
-<body>
+<body class="login-body">
+  <div id="auth-bg"><canvas id="mesh-canvas"></canvas></div>
+  <div id="page-transition" aria-hidden="true"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>
+
+  <!-- Navigation -->
   <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Main Navigation">
     <div class="container-fluid">
       <a class="navbar-brand" href="{{ url_for('index') }}">
@@ -78,7 +53,7 @@
     </div>
   </nav>
 
-  <div class="main-container">
+  <div class="main-container settings-wrapper">
     <div class="container-fluid">
       <div class="row mb-4">
         <div class="col-12">
@@ -90,59 +65,93 @@
         </div>
       </div>
 
-      <div class="row">
+      <div class="row g-4">
         <div class="col-lg-8">
-        <div class="card p-3">
-          <h5>실시간 스트림 설정</h5>
-          <form id="settings-form">
-            <div class="mb-3">
-              <label class="form-label">해상도</label>
-              <select id="resolution" class="form-select">
-                <option value="640x480">640×480</option>
-                <option value="1280x720">1280×720</option>
-                <option value="1920x1080">1920×1080</option>
-              </select>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">프레임 (FPS)</label>
-              <input id="fps" type="number" class="form-control" value="30" min="1" max="120">
-            </div>
-            <div class="mb-3">
-              <label class="form-label">사용할 모델</label>
-              <select id="model" class="form-select"></select>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">감지할 장구</label>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="helmet" id="ppe-helmet" checked>
-                <label class="form-check-label" for="ppe-helmet">헬멧</label>
+          <div class="login-card panel-content">
+            <h5 class="mb-3">실시간 스트림 설정</h5>
+            <form id="settings-form">
+              <div class="mb-3 row align-items-center">
+                <label class="col-auto col-form-label">해상도</label>
+                <div class="col">
+                  <select id="resolution" class="form-select">
+                    <option value="640x480">640×480</option>
+                    <option value="1280x720">1280×720</option>
+                    <option value="1920x1080">1920×1080</option>
+                  </select>
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="vest" id="ppe-vest" checked>
-                <label class="form-check-label" for="ppe-vest">조끼</label>
+
+              <div class="mb-3 row align-items-center">
+                <label class="col-auto col-form-label">프레임 (FPS)</label>
+                <div class="col">
+                  <input id="fps" type="number" class="form-control form-control-lg" value="30" min="1" max="120">
+                </div>
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="mask" id="ppe-mask" checked>
-                <label class="form-check-label" for="ppe-mask">마스크</label>
+
+              <div class="mb-3 row align-items-center">
+                <label class="col-auto col-form-label">카메라</label>
+                <div class="col">
+                  <select id="camera" class="form-select"></select>
+                </div>
               </div>
-            </div>
-            <div class="d-flex gap-2">
-              <button type="button" id="save-btn" class="btn btn-primary">저장</button>
-              <button type="button" id="reset-btn" class="btn btn-outline-light">초기화</button>
-            </div>
-          </form>
+
+              <div class="mb-3 row align-items-center">
+                <label class="col-auto col-form-label">사용할 모델</label>
+                <div class="col">
+                  <select id="model" class="form-select"></select>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">감지할 장구</label>
+                <div class="d-flex gap-3">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="helmet" id="ppe-helmet" checked>
+                    <label class="form-check-label" for="ppe-helmet">헬멧</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="vest" id="ppe-vest" checked>
+                    <label class="form-check-label" for="ppe-vest">조끼</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="mask" id="ppe-mask" checked>
+                    <label class="form-check-label" for="ppe-mask">마스크</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="button" id="save-btn" class="btn btn-primary">저장</button>
+                <button type="button" id="reset-btn" class="btn btn-outline-light">초기화</button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-      <div class="col-lg-4">
-        <div class="card p-3">
-          <h6>현재 설정</h6>
-          <pre id="current-config" style="white-space:pre-wrap;color:#cbd5e1;background:transparent;border:none"></pre>
+
+        <div class="col-lg-4">
+          <div class="login-card panel-content">
+            <h6>현재 설정</h6>
+            <pre id="current-config" style="white-space:pre-wrap;color:#cbd5e1;background:transparent;border:none; min-height: 120px;">로딩 중...</pre>
+            <hr class="text-secondary">
+            <h6 class="mb-3">비밀번호 변경</h6>
+            <div class="mb-2">
+              <input id="pw-current" type="password" class="form-control" placeholder="현재 비밀번호">
+            </div>
+            <div class="mb-3">
+              <input id="pw-new" type="password" class="form-control" placeholder="새 비밀번호">
+            </div>
+            <button type="button" id="pw-change-btn" class="btn btn-outline-light btn-sm">변경</button>
+            <small id="pw-msg" class="d-block mt-2 text-muted"></small>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-<script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/mesh-bg.js') }}"></script>
+  <script> if (typeof initMesh === 'function') initMesh('mesh-canvas'); </script>
+  <script>
 async function fetchModels(){
   const r = await fetch('/api/models');
   const j = await r.json();
@@ -151,7 +160,9 @@ async function fetchModels(){
   (j.files||[]).forEach(f=>{
     const opt = document.createElement('option'); opt.value=f; opt.textContent=f.split('/').pop(); sel.appendChild(opt);
   });
-  if(j.requested) sel.value=j.requested;
+  // preselect requested or loaded
+  if(j.requested && [...sel.options].some(o=>o.value===j.requested)) sel.value=j.requested;
+  else if(j.loaded && [...sel.options].some(o=>o.value===j.loaded)) sel.value=j.loaded;
 }
 
 async function loadSettings(){
@@ -159,6 +170,7 @@ async function loadSettings(){
   const j = await r.json();
   document.getElementById('resolution').value = j.width && j.height ? `${j.width}x${j.height}` : (j.resolution||'1280x720');
   document.getElementById('fps').value = j.fps||30;
+  await fetchCameras(j.cam_index);
   document.getElementById('ppe-helmet').checked = (j.ppe||[]).includes('helmet');
   document.getElementById('ppe-vest').checked = (j.ppe||[]).includes('vest');
   document.getElementById('ppe-mask').checked = (j.ppe||[]).includes('mask');
@@ -166,14 +178,18 @@ async function loadSettings(){
 }
 
 document.getElementById('save-btn').addEventListener('click', async ()=>{
+  const overlay = document.getElementById('page-transition');
+  overlay.classList.add('show');
   const payload = {
     width: parseInt(document.getElementById('resolution').value.split('x')[0],10)||1280,
     height: parseInt(document.getElementById('resolution').value.split('x')[1],10)||720,
     fps: parseInt(document.getElementById('fps').value,10)||30,
     model: document.getElementById('model').value,
+  cam_index: parseInt(document.getElementById('camera').value,10),
     ppe: [document.getElementById('ppe-helmet').checked? 'helmet': null, document.getElementById('ppe-vest').checked? 'vest': null, document.getElementById('ppe-mask').checked? 'mask': null].filter(Boolean)
   };
   const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  overlay.classList.remove('show');
   if(r.ok){ alert('설정이 저장되었습니다'); loadSettings(); }
   else{ alert('저장 실패'); }
 });
@@ -182,6 +198,43 @@ document.getElementById('reset-btn').addEventListener('click', ()=>{ if(confirm(
 
 // init
 fetchModels(); loadSettings();
+
+// Camera list
+async function fetchCameras(selected){
+  const r = await fetch('/api/cameras');
+  const j = await r.json();
+  const sel = document.getElementById('camera');
+  sel.innerHTML='';
+  (j.cameras||[]).forEach(c=>{
+    const opt = document.createElement('option'); opt.value=c.index; opt.textContent=`${c.name}`; sel.appendChild(opt);
+  });
+  const target = (selected ?? j.selected);
+  if(target!==undefined) sel.value = String(target);
+}
+
+// Password change
+document.getElementById('pw-change-btn').addEventListener('click', async ()=>{
+  const cur = document.getElementById('pw-current').value;
+  const nw = document.getElementById('pw-new').value;
+  const msg = document.getElementById('pw-msg');
+  msg.textContent = '';
+  if(!nw || !cur){ msg.textContent = '현재/새 비밀번호를 모두 입력하세요.'; return; }
+  const overlay = document.getElementById('page-transition'); overlay.classList.add('show');
+  const r = await fetch('/api/change_password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ current: cur, new: nw })});
+  overlay.classList.remove('show');
+  if(r.ok){ msg.textContent = '비밀번호가 변경되었습니다.'; document.getElementById('pw-current').value=''; document.getElementById('pw-new').value=''; }
+  else{ const j = await r.json().catch(()=>({error:'실패'})); msg.textContent = '변경 실패: ' + (j.error||'오류'); }
+});
+
+// Smooth page transitions
+window.addEventListener('beforeunload', ()=>{
+  const overlay = document.getElementById('page-transition');
+  if(overlay) overlay.classList.add('show');
+});
+window.addEventListener('pageshow', ()=>{
+  const overlay = document.getElementById('page-transition');
+  if(overlay) overlay.classList.remove('show');
+});
 </script>
 </body>
 </html>
