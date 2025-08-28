@@ -436,7 +436,7 @@
   <script src="{{ url_for('static', filename='js/about-hydrate.js') }}"></script>
   <script>
     // init mesh background
-  setTimeout(()=>{ if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas'); }, 250);
+  setTimeout(()=>{ if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas', { mouseStrength: 1.2 }); }, 250);
   // Initialize PageFX transitions (guard against double init)
   if (!window.__pagefx && window.initPageFX){
     window.__pagefx = initPageFX();

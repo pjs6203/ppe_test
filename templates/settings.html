@@ -154,7 +154,7 @@
   <script src="{{ url_for('static', filename='js/pagefx.js') }}"></script>
   <script src="{{ url_for('static', filename='js/partial-transitions.js') }}"></script>
   <script>
-    if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas');
+  if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas', { mouseStrength: 1.2 });
     // Initialize page FX for smooth transitions
     window.__pagefx = window.initPageFX && initPageFX();
     if (window.__pagefx){ __pagefx.bindAnchors(); __pagefx.playIntro(); }

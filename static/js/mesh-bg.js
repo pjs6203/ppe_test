@@ -5,12 +5,16 @@ function initMesh(canvasId = 'mesh-canvas', opts = {}) {
   const ctx = canvas.getContext('2d');
   let width = 0, height = 0, dpr = Math.max(1, window.devicePixelRatio || 1);
 
-  const cellW = opts.cellW || 140;
-  const cellH = opts.cellH || 90;
-  const jitter = opts.jitter || 30;
-  const maxConn = opts.maxConn || 6;
+  // Increase point density by ~20% (reduce cell size by sqrt(1/1.2))
+  const __densityBoost = 1.3; // 20% more points
+  const __scale = 1/Math.sqrt(__densityBoost); // ~0.913
+  const cellW = (typeof opts.cellW === 'number') ? opts.cellW : Math.round(140 * __scale);
+  const cellH = (typeof opts.cellH === 'number') ? opts.cellH : Math.round(90 * __scale);
+  const jitter = (typeof opts.jitter === 'number') ? opts.jitter : 27; // 약 10% 감소로 과한 겹침 완화
+  const maxConn = (typeof opts.maxConn === 'number') ? opts.maxConn : 7; // 약간 더 연결해 밀도에 균형
   const lineColorBase = opts.lineColorBase || 'rgba(88,192,255,';
   const nodeColorBase = opts.nodeColorBase || 'rgba(180,230,255,';
+  const mouseStrength = (typeof opts.mouseStrength === 'number') ? opts.mouseStrength : 1.5; // 1.0 기본, 1.2 권장
 
   let points = [];
   let mouse = {x: -9999, y: -9999};
@@ -63,8 +67,8 @@ function initMesh(canvasId = 'mesh-canvas', opts = {}) {
       const dy = (mouse.y - p.y);
       const dist2 = dx*dx+dy*dy + 0.001;
       const influence = Math.max(0, 1 - Math.sqrt(dist2)/400);
-      p.vx += (p.ox - p.x)*0.02 + (dx/dist2)*20*influence;
-      p.vy += (p.oy - p.y)*0.02 + (dy/dist2)*20*influence;
+  p.vx += (p.ox - p.x)*0.02 + (dx/dist2)*20*influence*mouseStrength;
+  p.vy += (p.oy - p.y)*0.02 + (dy/dist2)*20*influence*mouseStrength;
       p.vx *= 0.85; p.vy *= 0.85;
       p.x += p.vx * dt;
       p.y += p.vy * dt;

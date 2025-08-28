@@ -501,7 +501,7 @@
   <script src="{{ url_for('static', filename='js/mesh-bg.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pagefx.js') }}"></script>
   <script src="{{ url_for('static', filename='js/partial-transitions.js') }}"></script>
-  <script> setTimeout(()=>{ if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas'); },250); </script>
+  <script> setTimeout(()=>{ if (typeof initMesh === 'function' && !window.__meshInited) window.__meshInited = initMesh('mesh-canvas', { mouseStrength: 1.2 }); },250); </script>
   <script>
     let lastOkTs = 0;
     const LS_KEY_MODEL = "yd_selected_model";
