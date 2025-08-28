@@ -80,6 +80,24 @@
       font-weight: 500;
     }
 
+  /* Guidance overlay centered on the video */
+  .guidance-overlay{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .guidance-box{ max-width:80%; background:rgba(2,6,23,0.85); border:1px solid rgba(255,255,255,0.08); color:#e2e8f0; border-radius:16px; padding:1.1rem 1.4rem; box-shadow:0 20px 60px rgba(0,0,0,0.45); backdrop-filter:blur(8px); }
+  .guidance-title{ font-weight:800; color:#f8fafc; font-size:1.05rem; }
+  .guidance-text{ color:#cbd5e1; font-weight:600; font-size:.95rem; }
+  .guidance-icons{ display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.5rem; }
+  .g-icon{ width:36px; height:36px; border-radius:10px; display:grid; place-items:center; }
+  .g-icon.violation{ background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.45); color:#fecaca; }
+  .g-icon.warn{ background:rgba(245,158,11,0.18); border:1px solid rgba(245,158,11,0.45); color:#fde68a; }
+  .g-icon.ok{ background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.45); color:#bbf7d0; }
+  .guide-ppe-grid{ margin-top:.6rem; }
+  .guide-ppe-grid .ppe-item{ padding:.75rem; }
+  .guide-ppe-grid .ppe-icon{ font-size:1.4rem; }
+  .guide-ppe-grid .small{ font-size:.8rem; }
+
+  /* Per-item OK ticker */
+  .ppe-item.ok::after{ content:"\f00c"; font-family:"Font Awesome 6 Free"; font-weight:900; position:absolute; top:6px; right:8px; color:#22c55e; font-size:.9rem; }
+
     .hud-item {
       display: flex;
       align-items: center;
@@ -473,6 +491,29 @@
                     <span id="hud-fps">-</span> FPS
                   </div>
                 </div>
+                <div class="guidance-overlay" id="guidance" hidden>
+                  <div class="guidance-box">
+                    <div>
+                      <div class="guidance-title" id="guide-title">안내</div>
+                      <div class="guidance-text" id="guide-text">카메라 정면에 서 주세요.</div>
+                      <div class="guidance-icons" id="guide-icons" hidden></div>
+                      <div class="guide-ppe-grid ppe-grid" id="guide-ppe-grid" hidden>
+                        <div class="ppe-item" data-key="helmet">
+                          <div class="ppe-icon"><i class="fas fa-hard-hat"></i></div>
+                          <div class="small">헬멧</div>
+                        </div>
+                        <div class="ppe-item" data-key="vest">
+                          <div class="ppe-icon"><i class="fas fa-tshirt"></i></div>
+                          <div class="small">조끼</div>
+                        </div>
+                        <div class="ppe-item" data-key="mask">
+                          <div class="ppe-icon"><i class="fas fa-mask"></i></div>
+                          <div class="small">마스크</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div id="skeleton" class="skeleton d-none"></div>
             </div>
@@ -588,7 +629,7 @@
       }
     }
 
-    function updatePPEGrid(ppeData) {
+  function updatePPEGrid(ppeData) {
       const grid = document.getElementById("ppe-grid");
       const items = grid.children;
       
@@ -600,26 +641,26 @@
         'person': items[3]
       };
 
-      // 모든 아이템 초기화
-      Object.values(ppeItems).forEach(item => {
-        item.className = 'ppe-item';
-      });
+      // 아이템 클래스 제어는 가이던스 컨트롤러가 소유하도록 위임
+      if (!window.__ppeGuidanceOwnsGrid) {
+        // 모든 아이템 초기화
+        Object.values(ppeItems).forEach(item => { item.className = 'ppe-item'; });
 
-      // 상태에 따른 업데이트
-      if (ppeData.has_person) {
-        ppeItems.person.className = 'ppe-item safe';
-        
-        Object.entries(ppeData.present).forEach(([key, present]) => {
-          if (ppeItems[key]) {
-            if (present) {
-              ppeItems[key].className = 'ppe-item safe';
-            } else if (ppeData.required.includes(key)) {
-              ppeItems[key].className = 'ppe-item violation';
-            } else {
-              ppeItems[key].className = 'ppe-item warning';
+        // 상태에 따른 업데이트
+        if (ppeData.has_person) {
+          ppeItems.person.className = 'ppe-item safe';
+          Object.entries(ppeData.present).forEach(([key, present]) => {
+            if (ppeItems[key]) {
+              if (present) {
+                ppeItems[key].className = 'ppe-item safe';
+              } else if (ppeData.required.includes(key)) {
+                ppeItems[key].className = 'ppe-item violation';
+              } else {
+                ppeItems[key].className = 'ppe-item warning';
+              }
             }
-          }
-        });
+          });
+        }
       }
 
       // 전체 상태 업데이트
@@ -722,6 +763,143 @@
   // Initialize PageFX transitions
   window.__pagefx = window.initPageFX && initPageFX();
   if (window.__pagefx){ __pagefx.bindAnchors(); __pagefx.playIntro(); }
+  </script>
+  <script>
+    // PPE guidance controller
+    (function(){
+      const POLL_MS = 1000;
+      const ITEM_CONFIRM_MS = 2000; // 보호구 착용 지속 확인 시간
+      const SAFE_TOAST_MS = 1500;   // 전체 안전 확인시 안내 표시 시간
+
+      function bind(){
+        const grid = document.getElementById('ppe-grid');
+        const elGuide = document.getElementById('guidance');
+        if (!grid || !elGuide || elGuide.dataset.bound === '1') return;
+        // cleanup any previous timer on element
+        if (elGuide.__ppeTimer){ try{ clearInterval(elGuide.__ppeTimer); }catch{} }
+        elGuide.dataset.bound = '1';
+        window.__ppeGuidanceOwnsGrid = true;
+
+        const elGuideTitle = document.getElementById('guide-title');
+        const elGuideText = document.getElementById('guide-text');
+        const elGuideIcons = document.getElementById('guide-icons');
+        const guideGrid = document.getElementById('guide-ppe-grid');
+        const alertSec = document.getElementById('alert-section');
+        const alertMsg = document.getElementById('alert-message');
+
+        // data-key 부여(helmet, vest, mask, person)
+        (function ensureKeys(){
+          const labels = ['helmet','vest','mask','person'];
+          [...grid.querySelectorAll('.ppe-item')].forEach((el, i)=>{ if(!el.dataset.key && labels[i]) el.dataset.key = labels[i]; el.style.position='relative'; });
+        })();
+
+        const presentSince = Object.create(null);
+        let safeToastTimer = null;
+
+        const ICONS = { helmet:'fa-hard-hat', vest:'fa-tshirt', mask:'fa-mask', glasses:'fa-glasses', shoes:'fa-shoe-prints', person:'fa-user' };
+        const LABELS = { helmet:'헬멧', vest:'조끼', mask:'마스크', shoes:'안전화', glasses:'보안경', person:'작업자' };
+        function showGuide(title, text, iconKeys){
+          elGuideTitle.textContent = title;
+          elGuideText.textContent = text || '';
+          if (Array.isArray(iconKeys) && iconKeys.length){
+            elGuideIcons.innerHTML = iconKeys.map(k=>{
+              const ic = ICONS[k] || 'fa-circle';
+              const lb = LABELS[k] || k;
+              return `<div class="g-icon violation" title="${lb}"><i class="fas ${ic}"></i></div>`;
+            }).join('');
+            elGuideIcons.hidden = false;
+          } else {
+            elGuideIcons.innerHTML = '';
+            elGuideIcons.hidden = true;
+          }
+          elGuide.hidden = false;
+        }
+        function hideGuide(){ elGuide.hidden = true; }
+        function setItemState(key, state){
+          const els = [
+            grid.querySelector(`.ppe-item[data-key="${key}"]`),
+            guideGrid && guideGrid.querySelector(`.ppe-item[data-key="${key}"]`)
+          ].filter(Boolean);
+          els.forEach((el)=>{
+            el.classList.remove('ok','warning','violation','safe');
+            if(state === 'ok') { el.classList.add('safe','ok'); }
+            else if(state) { el.classList.add(state); }
+          });
+        }
+        function formatList(keys){ const ko = { helmet:'헬멧', vest:'조끼', mask:'마스크', shoes:'안전화', glasses:'보안경' }; return keys.map(k=> ko[k]||k).join(', '); }
+
+        async function poll(){
+          try{
+            const r = await fetch('/api/ppe_status', { cache:'no-store' });
+            const s = await r.json();
+            // 사람 감지
+            if (!s.has_person){
+              ['helmet','vest','mask'].forEach(k=> setItemState(k, 'warning'));
+              setItemState('person', 'violation');
+              showGuide('작업자 미감지', '카메라 정면에 서고, 프레임 안에 위치해 주세요.', ['person']);
+              alertSec.style.display = 'none';
+              guideGrid.hidden = true;
+              return;
+            }
+
+            hideGuide();
+            const required = Array.isArray(s.required)? s.required.filter(k=> ['helmet','vest','mask','glasses','shoes'].includes(k)) : ['helmet','vest','mask'];
+            const missing = Array.isArray(s.missing_required)? s.missing_required : [];
+            const present = s.present || {};
+            setItemState('person', 'ok');
+
+            // 타이머 갱신
+            required.forEach(k=>{ if (present[k]){ if (!presentSince[k]) presentSince[k] = Date.now(); } else { presentSince[k] = 0; } });
+
+            // UI 반영
+            required.forEach(k=>{
+              if (present[k]){
+                const okFor = presentSince[k] ? (Date.now() - presentSince[k]) : 0;
+                setItemState(k, okFor >= ITEM_CONFIRM_MS ? 'ok' : 'warning');
+              } else { setItemState(k, 'violation'); }
+            });
+
+            // 안내/알림
+            if (missing.length){
+              // 직관적 아이콘 중심의 안내 표시
+              showGuide('안전 위반 감지', '보호구를 착용하십시오.', missing);
+              alertSec.style.display = 'none';
+              guideGrid.hidden = false;
+            } else {
+              alertSec.style.display = 'none';
+              const allOk = required.every(k=> present[k] && (Date.now() - (presentSince[k]||0)) >= ITEM_CONFIRM_MS);
+              if (allOk){
+                showGuide('안전 확인', '보호구 착용이 확인되었습니다.');
+                clearTimeout(safeToastTimer);
+                safeToastTimer = setTimeout(hideGuide, SAFE_TOAST_MS);
+                guideGrid.hidden = true;
+              } else {
+                // 착용 확인 대기 상태 시에도 오버레이에 상태를 표시
+                showGuide('착용 확인 중', '보호구 착용을 확인하고 있습니다.');
+                guideGrid.hidden = false;
+              }
+            }
+          }catch(e){ /* ignore */ }
+        }
+
+        // start polling and keep timer handle on element
+        poll();
+        elGuide.__ppeTimer = setInterval(poll, POLL_MS);
+      }
+
+      // Bind on Turbo navigations and initial load
+      document.addEventListener('turbo:render', bind);
+      document.addEventListener('turbo:load', bind);
+      // Cleanup before caching this page
+      document.addEventListener('turbo:before-cache', ()=>{
+        const elGuide = document.getElementById('guidance');
+        if (elGuide && elGuide.__ppeTimer){ try{ clearInterval(elGuide.__ppeTimer); }catch{} }
+        if (elGuide) { delete elGuide.dataset.bound; }
+        window.__ppeGuidanceOwnsGrid = false;
+      });
+      // Try bind immediately as well
+      bind();
+    })();
   </script>
 </body>
 </html>

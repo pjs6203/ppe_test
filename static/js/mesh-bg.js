@@ -15,6 +15,8 @@ function initMesh(canvasId = 'mesh-canvas', opts = {}) {
   const lineColorBase = opts.lineColorBase || 'rgba(88,192,255,';
   const nodeColorBase = opts.nodeColorBase || 'rgba(180,230,255,';
   const mouseStrength = (typeof opts.mouseStrength === 'number') ? opts.mouseStrength : 1.5; // 1.0 기본, 1.2 권장
+  const idleStrength = (typeof opts.idleStrength === 'number') ? opts.idleStrength : 6; // 픽셀 진폭
+  const idleSpeed = (typeof opts.idleSpeed === 'number') ? opts.idleSpeed : 0.01; // 느린 드리프트 속도 0.006
 
   let points = [];
   let mouse = {x: -9999, y: -9999};
@@ -37,13 +39,13 @@ function initMesh(canvasId = 'mesh-canvas', opts = {}) {
     points = [];
     const cols = Math.ceil(width / cellW) + 1;
     const rows = Math.ceil(height / cellH) + 1;
-    for (let r=0;r<rows;r++){
+  for (let r=0;r<rows;r++){
       for (let c=0;c<cols;c++){
         const ox = c*cellW + ((r%2)?cellW/2:0);
         const oy = r*cellH;
         const px = ox + (Math.random()*2-1)*jitter;
         const py = oy + (Math.random()*2-1)*jitter;
-        points.push({x:px,y:py,ox:px,oy:py,vx:0,vy:0,neighbors:[]});
+    points.push({x:px,y:py,ox:px,oy:py,vx:0,vy:0,neighbors:[], phx: Math.random()*Math.PI*2, phy: Math.random()*Math.PI*2, amp: idleStrength*(0.6+0.8*Math.random())});
       }
     }
     for (let i=0;i<points.length;i++){
@@ -60,15 +62,21 @@ function initMesh(canvasId = 'mesh-canvas', opts = {}) {
     }
   }
 
+  let t = 0;
   function update(dt){
+    t += dt;
     for (let i=0;i<points.length;i++){
       const p = points[i];
+      // idle drifting target around origin
+      const tx = p.ox + Math.sin(t*idleSpeed + p.phx) * p.amp;
+      const ty = p.oy + Math.cos(t*idleSpeed + p.phy) * p.amp;
       const dx = (mouse.x - p.x);
       const dy = (mouse.y - p.y);
       const dist2 = dx*dx+dy*dy + 0.001;
       const influence = Math.max(0, 1 - Math.sqrt(dist2)/400);
-  p.vx += (p.ox - p.x)*0.02 + (dx/dist2)*20*influence*mouseStrength;
-  p.vy += (p.oy - p.y)*0.02 + (dy/dist2)*20*influence*mouseStrength;
+      // spring to drifting target + mouse influence
+      p.vx += (tx - p.x)*0.02 + (dx/dist2)*20*influence*mouseStrength;
+      p.vy += (ty - p.y)*0.02 + (dy/dist2)*20*influence*mouseStrength;
       p.vx *= 0.85; p.vy *= 0.85;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
