@@ -1,0 +1,42 @@
+:root{
+  --bg-dark: #051029;
+  --card-bg: #071427;
+  --muted: #9aa7b8;
+  --accent: #2563eb;
+  --text: #f8fafc;
+}
+
+body.login-body{
+  background: radial-gradient(1200px 600px at 10% 10%, rgba(59,130,246,0.08), transparent),
+              linear-gradient(180deg, var(--bg-dark), #031025 140%);
+  color: var(--text);
+}
+
+.login-card{
+  width: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text);
+}
+
+.login-card .logo{ color: var(--accent); }
+.login-card h4{ font-weight:700; color: var(--text); }
+.login-card small{ color: var(--muted); }
+
+.btn-icon{
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: none; color: var(--muted); opacity:0.95
+}
+
+.form-control-lg{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); color: var(--text); }
+.form-control-lg::placeholder{ color: #9fb1c8; }
+.form-control-lg:focus{ box-shadow: 0 8px 28px rgba(37,99,235,0.18); border-color: var(--accent); outline: 3px solid rgba(37,99,235,0.08); }
+
+.alert{ background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); color: #ffdede; }
+
+.small-help{ color: var(--muted); }
+.footer-note{ color: var(--muted); font-size:0.78rem; margin-top:10px; text-align:center; }
+
+@media (max-width: 480px){ .login-card{ width: 92%; } .btn-icon{ top:48px; } }

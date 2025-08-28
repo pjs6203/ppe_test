@@ -53,6 +53,13 @@
       color: var(--primary-color) !important;
     }
 
+    .nav-link {
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+      font-weight: 500;
+      font-size: 1.05rem; /* match about.html */
+    }
+
     .main-container {
       padding: 2rem 0;
     }
@@ -390,10 +397,14 @@
            <i class="fas fa-video me-1"></i>
            실시간 감지
          </a>
-         <a class="nav-link" href="{{ url_for('about') }}">
-           <i class="fas fa-info-circle me-1"></i>
-           시스템 정보
-         </a>
+           <a class="nav-link" href="{{ url_for('about') }}">
+             <i class="fas fa-info-circle me-1"></i>
+             시스템 정보
+           </a>
+           <a class="nav-link" href="{{ url_for('settings') }}" title="설정">
+             <i class="fas fa-cog me-1"></i>
+             설정
+           </a>
        </div>
     </div>
   </nav>

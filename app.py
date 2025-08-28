@@ -15,7 +15,7 @@ from collections import Counter
 
 import cv2
 import numpy as np
-from flask import Flask, Response, render_template, jsonify, request, send_file
+from flask import Flask, Response, render_template, jsonify, request, send_file, redirect, url_for, session, flash
 from PIL import Image
 import torch
 from ultralytics import YOLO
@@ -23,6 +23,7 @@ import platform, psutil, subprocess
 from io import BytesIO
 from glob import glob
 import traceback
+import json
 
 # -----------------------------
 # 기본 설정
@@ -40,6 +41,84 @@ os.environ.setdefault("TORCH_LOAD_WEIGHTS_ONLY", "0")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 device = "cuda" if torch.cuda.is_available() else "cpu"
+# secret key for session. Prefer to set SECRET_KEY in env for production.
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
+
+# Simple admin credentials. For production, set ADMIN_USER and ADMIN_PASS_HASH in env.
+from werkzeug.security import generate_password_hash, check_password_hash
+ADMIN_USER = os.getenv('ADMIN_USER', 'admin')
+ADMIN_PASS_HASH = os.getenv('ADMIN_PASS_HASH') or generate_password_hash(os.getenv('ADMIN_PASS', 'password'))
+
+# Config persistence
+CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
+
+def load_config():
+    """Load settings from CONFIG_PATH and apply to globals."""
+    global TARGET_W, TARGET_H, TARGET_FPS, REQUIRED_PPE, requested_model_path, ADMIN_USER, ADMIN_PASS_HASH
+    if not os.path.isfile(CONFIG_PATH):
+        return {}
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            cfg = json.load(f)
+    except Exception:
+        return {}
+
+    # Apply known settings if present
+    try:
+        if 'width' in cfg and isinstance(cfg['width'], int):
+            TARGET_W = int(cfg['width'])
+        if 'height' in cfg and isinstance(cfg['height'], int):
+            TARGET_H = int(cfg['height'])
+        if 'fps' in cfg and isinstance(cfg['fps'], int):
+            TARGET_FPS = int(cfg['fps'])
+        if 'ppe' in cfg and isinstance(cfg['ppe'], list):
+            REQUIRED_PPE = [s.strip().lower() for s in cfg['ppe'] if isinstance(s, str) and s.strip()]
+        if 'model' in cfg and cfg['model']:
+            m = cfg['model']
+            if not os.path.isabs(m):
+                m = os.path.abspath(m)
+            wd = os.path.abspath(WEIGHTS_DIR)
+            if os.path.isfile(m) and os.path.abspath(m).startswith(wd):
+                requested_model_path = m
+        # Admin user/hash
+        if 'admin_user' in cfg and cfg['admin_user']:
+            ADMIN_USER = str(cfg['admin_user'])
+        if 'admin_pass_hash' in cfg and cfg['admin_pass_hash']:
+            ADMIN_PASS_HASH = str(cfg['admin_pass_hash'])
+    except Exception:
+        pass
+    return cfg
+
+def save_config(cfg: dict) -> bool:
+    try:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"[CONFIG] 저장 실패: {e}")
+        return False
+
+def get_settings_dict() -> dict:
+    return {
+        "width": TARGET_W,
+        "height": TARGET_H,
+        "fps": TARGET_FPS,
+        "model": requested_model_path,
+        "ppe": REQUIRED_PPE,
+        "admin_user": ADMIN_USER,
+        # intentionally include hash so server can persist it; UI will not display it
+        "admin_pass_hash": ADMIN_PASS_HASH,
+    }
+
+from functools import wraps
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('user') != ADMIN_USER:
+            return redirect(url_for('login', next=request.path))
+        return f(*args, **kwargs)
+    return decorated
 
 # -----------------------------
 # 모델 관리 (스레드 안전)
@@ -563,17 +642,21 @@ def yolo_inference_loop():
 # ----------------------------
 @app.route("/")
 def index():
-    return render_template("webcam.html")
+    # redirect to webcam page which is protected
+    return redirect(url_for('webcam_page'))
 
 @app.route("/webcam")
+@login_required
 def webcam_page():
     return render_template("webcam.html")
 
 @app.route("/video_feed")
+@login_required
 def video_feed():
     return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/snapshot.jpg")
+@login_required
 def snapshot():
     with frame_lock:
         if output_frame is None:
@@ -583,6 +666,38 @@ def snapshot():
         buf = BytesIO(); pil.save(buf, format="JPEG", quality=90); buf.seek(0)
         return send_file(buf, mimetype="image/jpeg")
 
+
+# -----------------------------
+# 로그인/로그아웃 라우트
+# -----------------------------
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        # 간단한 사용자 인증 로직 (환경변수 ADMIN_USER, ADMIN_PASS_HASH 사용)
+        if username == ADMIN_USER and check_password_hash(ADMIN_PASS_HASH, password):
+            session['user'] = username
+            flash('로그인 성공!', 'success')
+            return redirect(request.args.get('next') or url_for('webcam_page'))
+        else:
+            flash('로그인 실패: 잘못된 사용자명 또는 비밀번호', 'danger')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    flash('로그아웃 되었습니다.', 'info')
+    return redirect(url_for('login'))
+
+# -----------------------------
+# 보호된 라우트 예시
+# -----------------------------
+@app.route("/protected")
+@login_required
+def protected():
+    return "This is a protected route. You are logged in as: " + session.get('user', '')
+
 @app.route("/healthz")
 def healthz():
     return {"status": "ok"}
@@ -591,6 +706,76 @@ def healthz():
 def about():
     versions = get_system_versions()
     return render_template("about.html", versions=versions)
+
+
+@app.route('/settings', endpoint='settings')
+@login_required
+def settings_page():
+    return render_template('settings.html')
+
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+@login_required
+def api_settings():
+    if request.method == 'GET':
+        return jsonify(get_settings_dict())
+    data = request.get_json(silent=True) or {}
+    # validate and apply
+    cfg = {}
+    try:
+        w = int(data.get('width', TARGET_W))
+        h = int(data.get('height', TARGET_H))
+        fps = int(data.get('fps', TARGET_FPS))
+        cfg['width'] = w; cfg['height'] = h; cfg['fps'] = fps
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Invalid numeric fields'}), 400
+    model = data.get('model')
+    if model:
+        if not os.path.isabs(model):
+            model = os.path.abspath(model)
+        wd = os.path.abspath(WEIGHTS_DIR)
+        if not os.path.isfile(model) or not os.path.abspath(model).startswith(wd):
+            return jsonify({'ok': False, 'error': 'Invalid model path'}), 400
+        cfg['model'] = model
+    ppe = data.get('ppe')
+    if isinstance(ppe, list):
+        cfg['ppe'] = [str(x).strip().lower() for x in ppe if str(x).strip()]
+    else:
+        cfg['ppe'] = REQUIRED_PPE
+
+    # Admin user/password handling
+    au = data.get('admin_user')
+    ap = data.get('admin_pass')
+    if au:
+        cfg['admin_user'] = str(au)
+    if ap:
+        # store hash, never raw password
+        try:
+            cfg['admin_pass_hash'] = generate_password_hash(str(ap))
+        except Exception:
+            pass
+
+    ok = save_config(cfg)
+    if not ok:
+        return jsonify({'ok': False, 'error': 'Failed to save config'}), 500
+
+    # apply immediately
+    load_config()
+    return jsonify({'ok': True, 'saved': cfg})
+
+
+@app.route('/api/settings/reset', methods=['POST'])
+@login_required
+def api_settings_reset():
+    # remove config file if exists and reload defaults
+    try:
+        if os.path.isfile(CONFIG_PATH):
+            os.remove(CONFIG_PATH)
+    except Exception:
+        pass
+    # reload defaults from empty config
+    load_config()
+    return jsonify({'ok': True})
 
 @app.route("/api/system_metrics")
 def api_system_metrics():
@@ -625,10 +810,16 @@ def api_ppe_status():
 def api_models():
     ensure_default_model_selected()
     files = list_weight_files()
+    loading = False
+    try:
+        loading = (requested_model_path is not None) and (requested_model_path != loaded_model_path)
+    except Exception:
+        loading = False
     return jsonify({
         "files": files,
         "requested": requested_model_path,
         "loaded": loaded_model_path,
+        "loading": loading,
         "error": last_model_error,
         "device": device,
     })
@@ -653,6 +844,8 @@ def api_select_model():
     reload_event.set()
     return jsonify({"ok": True, "requested": requested_model_path})
 
+# Note: login/logout and protected routes defined earlier to avoid duplication.
+
 # -----------------------------
 # 실행
 # -----------------------------
@@ -667,6 +860,11 @@ if __name__ == "__main__":
     print(f"📊 시스템 정보: http://localhost:5000/about")
     print("=" * 60)
     
+    # Load persisted settings (if present) before starting inference thread
+    cfg = load_config()
+    if cfg:
+        print(f"[CONFIG] Loaded config: {cfg}")
+
     threading.Thread(target=yolo_inference_loop, daemon=True).start()
     print("✅ YOLO 추론 스레드 시작됨")
     print("🌐 Flask 웹서버 시작 중...")

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>설정 · PPE 시스템</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #3b82f6;
+      --border-color: #475569;
+      --card-bg: #1e293b;
+      --text-primary: #ffffff;
+      --text-muted: #94a3b8;
+    }
+    body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg,#0f172a,#1e293b); color: var(--text-primary); }
+    .navbar { background: rgba(15,23,42,0.98); border-bottom:1px solid var(--border-color) }
+    .card { background: rgba(30,41,59,0.8); border:1px solid var(--border-color) }
+    .version-badge { background: rgba(30,41,59,0.6); color: #93c5fd }
+    .form-label { color: #cbd5e1 }
+    .form-control, .form-select { background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.05); color:var(--text-primary) }
+  /* Ensure dropdown options are readable on dark theme */
+  .form-select, .form-select:focus { color: #e6eef8; background: rgba(14,20,30,0.96); }
+  .form-select option { background: rgba(14,20,30,0.96); color: #e6eef8; }
+  /* For better contrast in Windows native dropdowns */
+  select.form-select::-ms-expand { filter: invert(1); }
+    .form-check-label { color:#cbd5e1 }
+    .btn-outline-light { border-color: rgba(255,255,255,0.06); }
+    /* Navbar brand to match other pages */
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--primary-color) !important;
+    }
+    /* Page header styles and nav to match about/webcam exactly */
+    .main-container { padding: 2rem 0; }
+    .nav-link {
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+      font-weight: 500;
+      font-size: 1.05rem; /* match other templates */
+    }
+    .nav-link:hover { color: var(--primary-color); }
+    .nav-link.active { color: var(--primary-color); background: rgba(59,130,246,0.1); }
+    .main-container h1.h2 {
+      font-size: 1.75rem; /* match about's h2 size visually */
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+    .main-container p.text-muted { color: var(--text-muted) !important; font-weight: 500; }
+    .main-container .fa-cogs { font-size: 1.6rem; margin-right: 0.5rem; opacity: 0.95; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Main Navigation">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="fas fa-shield-alt me-2"></i>
+        PPE 안전장비 감지 시스템
+      </a>
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{{ url_for('webcam_page') }}">
+          <i class="fas fa-video me-1"></i>
+          실시간 감지
+        </a>
+        <a class="nav-link" href="{{ url_for('about') }}">
+          <i class="fas fa-info-circle me-1"></i>
+          시스템 정보
+        </a>
+        <a class="nav-link active" aria-current="page" href="{{ url_for('settings') }}" title="설정">
+          <i class="fas fa-cog me-1"></i>
+          설정
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="container-fluid">
+      <div class="row mb-4">
+        <div class="col-12">
+          <h1 class="h2 mb-2">
+            <i class="fas fa-cogs me-2"></i>
+            설정
+          </h1>
+          <p class="text-muted">실시간 시스템 모니터링 및 버전 정보</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-lg-8">
+        <div class="card p-3">
+          <h5>실시간 스트림 설정</h5>
+          <form id="settings-form">
+            <div class="mb-3">
+              <label class="form-label">해상도</label>
+              <select id="resolution" class="form-select">
+                <option value="640x480">640×480</option>
+                <option value="1280x720">1280×720</option>
+                <option value="1920x1080">1920×1080</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">프레임 (FPS)</label>
+              <input id="fps" type="number" class="form-control" value="30" min="1" max="120">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">사용할 모델</label>
+              <select id="model" class="form-select"></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">감지할 장구</label>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="helmet" id="ppe-helmet" checked>
+                <label class="form-check-label" for="ppe-helmet">헬멧</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="vest" id="ppe-vest" checked>
+                <label class="form-check-label" for="ppe-vest">조끼</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="mask" id="ppe-mask" checked>
+                <label class="form-check-label" for="ppe-mask">마스크</label>
+              </div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" id="save-btn" class="btn btn-primary">저장</button>
+              <button type="button" id="reset-btn" class="btn btn-outline-light">초기화</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card p-3">
+          <h6>현재 설정</h6>
+          <pre id="current-config" style="white-space:pre-wrap;color:#cbd5e1;background:transparent;border:none"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+async function fetchModels(){
+  const r = await fetch('/api/models');
+  const j = await r.json();
+  const sel = document.getElementById('model');
+  sel.innerHTML='';
+  (j.files||[]).forEach(f=>{
+    const opt = document.createElement('option'); opt.value=f; opt.textContent=f.split('/').pop(); sel.appendChild(opt);
+  });
+  if(j.requested) sel.value=j.requested;
+}
+
+async function loadSettings(){
+  const r = await fetch('/api/settings');
+  const j = await r.json();
+  document.getElementById('resolution').value = j.width && j.height ? `${j.width}x${j.height}` : (j.resolution||'1280x720');
+  document.getElementById('fps').value = j.fps||30;
+  document.getElementById('ppe-helmet').checked = (j.ppe||[]).includes('helmet');
+  document.getElementById('ppe-vest').checked = (j.ppe||[]).includes('vest');
+  document.getElementById('ppe-mask').checked = (j.ppe||[]).includes('mask');
+  document.getElementById('current-config').textContent = JSON.stringify(j, null, 2);
+}
+
+document.getElementById('save-btn').addEventListener('click', async ()=>{
+  const payload = {
+    width: parseInt(document.getElementById('resolution').value.split('x')[0],10)||1280,
+    height: parseInt(document.getElementById('resolution').value.split('x')[1],10)||720,
+    fps: parseInt(document.getElementById('fps').value,10)||30,
+    model: document.getElementById('model').value,
+    ppe: [document.getElementById('ppe-helmet').checked? 'helmet': null, document.getElementById('ppe-vest').checked? 'vest': null, document.getElementById('ppe-mask').checked? 'mask': null].filter(Boolean)
+  };
+  const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if(r.ok){ alert('설정이 저장되었습니다'); loadSettings(); }
+  else{ alert('저장 실패'); }
+});
+
+document.getElementById('reset-btn').addEventListener('click', ()=>{ if(confirm('설정을 기본값으로 초기화할까요?')){ fetch('/api/settings/reset', {method:'POST'}).then(()=>loadSettings()); } });
+
+// init
+fetchModels(); loadSettings();
+</script>
+</body>
+</html>
