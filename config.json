@@ -1,9 +1,9 @@
 {
-  "width": 1920,
-  "height": 1080,
+  "width": 1280,
+  "height": 720,
   "fps": 60,
   "cam_index": 0,
-  "model": "C:\\Users\\jspark\\Desktop\\python\\ppe_test\\weights\\ppe.pt",
+  "model": "C:\\Users\\jinsu\\Desktop\\py\\ppe_test\\weights\\ppe.pt",
   "ppe": [
     "helmet",
     "vest",

@@ -344,8 +344,12 @@
       </a>
              <div class="navbar-nav ms-auto">
          <a class="nav-link active" href="{{ url_for('webcam_page') }}">
-           <i class="fas fa-video me-1"></i>
-           실시간 감지
+           <i class="fas fa-door-open me-1"></i>
+           출입통제
+         </a>
+         <a class="nav-link" href="{{ url_for('monitor_page') }}">
+           <i class="fas fa-eye me-1"></i>
+           모니터링
          </a>
            <a class="nav-link" href="{{ url_for('about') }}">
              <i class="fas fa-info-circle me-1"></i>
@@ -365,8 +369,8 @@
       <div class="row mb-4">
         <div class="col-12">
           <h1 class="h2 mb-2">
-            <i class="fas fa-video me-2"></i>
-            실시간 안전장비 감지
+            <i class="fas fa-door-open me-2"></i>
+            출입통제
           </h1>
           <p class="text-muted">웹캠을 통한 실시간 PPE(개인보호장비) 감지 및 모니터링</p>
         </div>
@@ -473,14 +477,14 @@
                 <i class="fas fa-video me-2"></i>
                 실시간 영상
               </h5>
-              <a class="btn btn-primary btn-sm" href="/snapshot.jpg" target="_blank">
+              <a class="btn btn-primary btn-sm" href="/snapshot.jpg?cam=entrance" target="_blank">
                 <i class="fas fa-camera me-1"></i>
                 스냅샷
               </a>
             </div>
             <div class="card-body">
               <div class="video-container">
-                <img id="video" src="{{ url_for('video_feed') }}" alt="실시간 영상" class="video-feed" />
+                <img id="video" src="{{ url_for('video_feed') }}?cam=entrance" alt="실시간 영상" class="video-feed" />
                 <div class="hud-overlay" id="hud" hidden>
                   <div class="hud-item">
                     <i class="fas fa-expand-arrows-alt"></i>
@@ -698,8 +702,8 @@
     async function pollStats() {
       try {
         const [sRes, ppeRes] = await Promise.all([
-          fetch("/api/stream_stats", { cache: "no-store" }),
-          fetch("/api/ppe_status", { cache: "no-store" }),
+          fetch("/api/stream_stats?cam=entrance", { cache: "no-store" }),
+          fetch("/api/ppe_status?cam=entrance", { cache: "no-store" }),
         ]);
         
         const s = await sRes.json();

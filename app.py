@@ -35,6 +35,7 @@ except Exception:
 WEIGHTS_DIR = "./weights"
 DEFAULT_MODEL = os.getenv("MODEL_PATH", "").strip() or None  # 우선순위: 환경변수 > 첫 번째 pt
 CAM_INDEX = int(os.getenv("CAM_INDEX", "0"))
+MONITOR_CAM_INDEX = int(os.getenv("MONITOR_CAM_INDEX", "1"))
 TARGET_W, TARGET_H = 1920, 1080
 TARGET_FPS = 60
 FLIP_LR = True
@@ -58,7 +59,7 @@ CONFIG_PATH = os.path.join(os.getcwd(), "config.json")
 
 def load_config():
     """Load settings from CONFIG_PATH and apply to globals."""
-    global TARGET_W, TARGET_H, TARGET_FPS, REQUIRED_PPE, requested_model_path, ADMIN_USER, ADMIN_PASS_HASH, CAM_INDEX
+    global TARGET_W, TARGET_H, TARGET_FPS, REQUIRED_PPE, requested_model_path, ADMIN_USER, ADMIN_PASS_HASH, CAM_INDEX, MONITOR_CAM_INDEX
     if not os.path.isfile(CONFIG_PATH):
         return {}
     try:
@@ -77,6 +78,11 @@ def load_config():
             TARGET_FPS = int(cfg['fps'])
         if 'cam_index' in cfg and isinstance(cfg['cam_index'], int):
             CAM_INDEX = int(cfg['cam_index'])
+        # dual camera indices (optional)
+        if 'entrance_cam_index' in cfg and isinstance(cfg['entrance_cam_index'], int):
+            CAM_INDEX = int(cfg['entrance_cam_index'])
+        if 'monitor_cam_index' in cfg and isinstance(cfg['monitor_cam_index'], int):
+            MONITOR_CAM_INDEX = int(cfg['monitor_cam_index'])
         if 'ppe' in cfg and isinstance(cfg['ppe'], list):
             REQUIRED_PPE = [s.strip().lower() for s in cfg['ppe'] if isinstance(s, str) and s.strip()]
         if 'model' in cfg and cfg['model']:
@@ -109,7 +115,11 @@ def get_settings_dict() -> dict:
         "width": TARGET_W,
         "height": TARGET_H,
         "fps": TARGET_FPS,
-    "cam_index": CAM_INDEX,
+        # legacy single camera field (kept for backward compatibility)
+        "cam_index": CAM_INDEX,
+        # dual camera fields
+        "entrance_cam_index": CAM_INDEX,
+        "monitor_cam_index": MONITOR_CAM_INDEX,
         "model": requested_model_path,
         "ppe": REQUIRED_PPE,
         "admin_user": ADMIN_USER,
@@ -136,7 +146,7 @@ requested_model_path: Optional[str] = None   # 사용자가 선택한 경로
 loaded_model_path: Optional[str] = None      # 현재 메모리에 올라간 경로
 reload_event = threading.Event()
 last_model_error: Optional[str] = None
-camera_names_cache = {"ts": 0.0, "names": []}
+camera_names_cache = {"ts": 0.0, "names": [], "source": None}
 
 def list_weight_files() -> List[str]:
     files = sorted(glob(os.path.join(WEIGHTS_DIR, "*.pt")))
@@ -156,16 +166,22 @@ def ensure_default_model_selected():
             requested_model_path = candidates[0]
 
 # -----------------------------
-# 글로벌 상태 (스트림/객체/PPE/시스템)
+# 글로벌 상태 (스트림/객체/PPE/시스템) - 듀얼 카메라 지원
 # -----------------------------
-output_frame: Optional[np.ndarray] = None
-frame_lock = threading.Lock()
+CAM_KINDS = ("entrance", "monitor")
 
-stream_stats = {"width": None, "height": None, "fps": 0.0, "frame_index": 0}
-stats_lock = threading.Lock()
+class CamState:
+    def __init__(self):
+        self.output_frame: Optional[np.ndarray] = None
+        self.frame_lock = threading.Lock()
+        self.stream_stats = {"width": None, "height": None, "fps": 0.0, "frame_index": 0}
+        self.stats_lock = threading.Lock()
+        self.last_objects: Dict[str, int] = {}
+        self.last_objects_lock = threading.Lock()
+        self.cam_change_event = threading.Event()
 
-last_objects: Dict[str, int] = {}
-last_objects_lock = threading.Lock()
+cam_states = {k: CamState() for k in CAM_KINDS}
+cam_indices = {"entrance": CAM_INDEX, "monitor": MONITOR_CAM_INDEX}
 
 # NVML (옵션)
 try:
@@ -508,11 +524,11 @@ def open_camera(index: int) -> cv2.VideoCapture:
             cap.set(cv2.CAP_PROP_FPS,          TARGET_FPS)
         return cap
 
-def gen_frames():
-    global output_frame
+def gen_frames(kind: str = "entrance"):
+    state = cam_states.get(kind, cam_states["entrance"])  # fallback
     while True:
-        with frame_lock:
-            frame = None if output_frame is None else output_frame.copy()
+        with state.frame_lock:
+            frame = None if state.output_frame is None else state.output_frame.copy()
         if frame is None:
             placeholder = np.ones((480, 640, 3), dtype=np.uint8) * 255
             cv2.putText(placeholder, "Initializing stream...", (50, 240),
@@ -529,8 +545,12 @@ def gen_frames():
 # -----------------------------
 # 추론 스레드
 # -----------------------------
-def yolo_inference_loop():
-    global output_frame, model, loaded_model_path, last_model_error
+def yolo_inference_loop(kind: str = "entrance"):
+    global model, loaded_model_path, last_model_error
+
+    state = cam_states.get(kind, cam_states["entrance"])  # fallback
+    def get_cam_index():
+        return cam_indices.get(kind, CAM_INDEX)
 
     ensure_default_model_selected()
     # 최초 로드
@@ -546,14 +566,9 @@ def yolo_inference_loop():
             traceback.print_exc()
 
     retry = 0
-    # event to allow camera switching at runtime
-    global cam_change_event
-    try:
-        cam_change_event
-    except NameError:
-        cam_change_event = threading.Event()
+    # per-camera change event is in state
     while True:
-        cap = open_camera(CAM_INDEX)
+        cap = open_camera(get_cam_index())
         if not cap.isOpened():
             retry += 1
             wait = min(5.0, 0.5 * retry)
@@ -589,8 +604,8 @@ def yolo_inference_loop():
                         reload_event.clear()
 
                 # camera switch request
-                if cam_change_event.is_set():
-                    cam_change_event.clear()
+                if state.cam_change_event.is_set():
+                    state.cam_change_event.clear()
                     break  # break inner loop to reopen with new CAM_INDEX
 
                 ret, frame = cap.read()
@@ -599,13 +614,13 @@ def yolo_inference_loop():
                 if FLIP_LR: frame = cv2.flip(frame, 1)
 
                 h, w = frame.shape[:2]
-                with stats_lock:
-                    stream_stats["width"] = w
-                    stream_stats["height"] = h
-                    stream_stats["frame_index"] += 1
+                with state.stats_lock:
+                    state.stream_stats["width"] = w
+                    state.stream_stats["height"] = h
+                    state.stream_stats["frame_index"] += 1
 
                 annotated = frame
-                do_infer = (INFER_EVERY <= 1) or (stream_stats["frame_index"] % INFER_EVERY == 0)
+                do_infer = (INFER_EVERY <= 1) or (state.stream_stats["frame_index"] % INFER_EVERY == 0)
 
                 try:
                     # 모델이 없으면 그냥 패스(오류 표시는 프레임에 텍스트)
@@ -614,9 +629,8 @@ def yolo_inference_loop():
                             with torch.no_grad():
                                 results = model(annotated, verbose=False)
                         res = results[0]
-                        with last_objects_lock:
-                            global last_objects
-                            last_objects = count_objects(res, model)
+                        with state.last_objects_lock:
+                            state.last_objects = count_objects(res, model)
                         try:
                             if hasattr(res, "plot"):
                                 annotated = res.plot()
@@ -638,15 +652,15 @@ def yolo_inference_loop():
                     cv2.putText(annotated, f"감지 오류: {type(e).__name__}",
                                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-                with frame_lock:
-                    output_frame = annotated
+                with state.frame_lock:
+                    state.output_frame = annotated
 
                 fps_counter += 1
                 now = time.time()
                 if now - t0 >= 1.0:
                     fps = fps_counter / (now - t0)
-                    with stats_lock:
-                        stream_stats["fps"] = fps
+                    with state.stats_lock:
+                        state.stream_stats["fps"] = fps
                     fps_counter = 0; t0 = now
 
                 time.sleep(0.001)
@@ -672,15 +686,22 @@ def webcam_page():
 @app.route("/video_feed")
 @login_required
 def video_feed():
-    return Response(gen_frames(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    cam = (request.args.get('cam') or 'entrance').strip().lower()
+    if cam not in CAM_KINDS:
+        cam = 'entrance'
+    return Response(gen_frames(cam), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/snapshot.jpg")
 @login_required
 def snapshot():
-    with frame_lock:
-        if output_frame is None:
+    cam = (request.args.get('cam') or 'entrance').strip().lower()
+    if cam not in CAM_KINDS:
+        cam = 'entrance'
+    state = cam_states[cam]
+    with state.frame_lock:
+        if state.output_frame is None:
             return ("No frame", 503)
-        rgb = cv2.cvtColor(output_frame, cv2.COLOR_BGR2RGB)
+        rgb = cv2.cvtColor(state.output_frame, cv2.COLOR_BGR2RGB)
         pil = Image.fromarray(rgb)
         buf = BytesIO(); pil.save(buf, format="JPEG", quality=90); buf.seek(0)
         return send_file(buf, mimetype="image/jpeg")
@@ -753,6 +774,13 @@ def api_settings():
         if 'cam_index' in data and data.get('cam_index') is not None:
             ci = int(data.get('cam_index'))
             cfg['cam_index'] = ci
+        # dual camera indices (optional)
+        if 'entrance_cam_index' in data and data.get('entrance_cam_index') is not None:
+            eci = int(data.get('entrance_cam_index'))
+            cfg['entrance_cam_index'] = eci
+        if 'monitor_cam_index' in data and data.get('monitor_cam_index') is not None:
+            mci = int(data.get('monitor_cam_index'))
+            cfg['monitor_cam_index'] = mci
     except Exception:
         return jsonify({'ok': False, 'error': 'Invalid camera index'}), 400
     model = data.get('model')
@@ -787,10 +815,14 @@ def api_settings():
 
     # apply immediately
     load_config()
-    # trigger camera reopen if cam_index changed
+    # trigger camera reopen if indices changed
     try:
-        if 'cam_index' in cfg:
-            cam_change_event.set()
+        if 'entrance_cam_index' in cfg:
+            cam_indices['entrance'] = int(cfg['entrance_cam_index'])
+            cam_states['entrance'].cam_change_event.set()
+        if 'monitor_cam_index' in cfg:
+            cam_indices['monitor'] = int(cfg['monitor_cam_index'])
+            cam_states['monitor'].cam_change_event.set()
     except Exception:
         pass
     # trigger model reload if changed
@@ -821,9 +853,13 @@ def api_system_metrics():
 
 @app.route("/api/stream_stats")
 def api_stream_stats():
-    with stats_lock:
-        w = stream_stats["width"]; h = stream_stats["height"]
-        fps = stream_stats["fps"]; idx = stream_stats["frame_index"]
+    cam = (request.args.get('cam') or 'entrance').strip().lower()
+    if cam not in CAM_KINDS:
+        cam = 'entrance'
+    state = cam_states[cam]
+    with state.stats_lock:
+        w = state.stream_stats["width"]; h = state.stream_stats["height"]
+        fps = state.stream_stats["fps"]; idx = state.stream_stats["frame_index"]
     res_str = None if (w is None or h is None) else f"{w}×{h}"
     return jsonify({
         "width": w, "height": h, "resolution": res_str,
@@ -833,13 +869,21 @@ def api_stream_stats():
 
 @app.route("/api/objects")
 def api_objects():
-    with last_objects_lock:
-        return jsonify(last_objects)
+    cam = (request.args.get('cam') or 'entrance').strip().lower()
+    if cam not in CAM_KINDS:
+        cam = 'entrance'
+    state = cam_states[cam]
+    with state.last_objects_lock:
+        return jsonify(state.last_objects)
 
 @app.route("/api/ppe_status")
 def api_ppe_status():
-    with last_objects_lock:
-        objs = dict(last_objects)
+    cam = (request.args.get('cam') or 'entrance').strip().lower()
+    if cam not in CAM_KINDS:
+        cam = 'entrance'
+    state = cam_states[cam]
+    with state.last_objects_lock:
+        objs = dict(state.last_objects)
     status = derive_ppe_status(objs)
     return jsonify(status)
 
@@ -909,31 +953,145 @@ def _probe_camera(index: int) -> bool:
         except Exception: pass
         return ok
 
+def _ffmpeg_list_dshow() -> List[str]:
+    """Try to list DirectShow devices via ffmpeg output and extract video device names."""
+    candidates = [
+        'ffmpeg',
+        os.path.join(os.getcwd(), 'ffmpeg.exe'),
+        os.path.join(os.getcwd(), '..', 'ffmpeg', 'ffmpeg.exe'),
+        os.path.join('C:\\ffmpeg', 'bin', 'ffmpeg.exe'),
+    ]
+    for exe in candidates:
+        try:
+            out = subprocess.check_output([exe, '-f', 'dshow', '-list_devices', 'true', '-i', 'dummy'],
+                                          stderr=subprocess.STDOUT, text=True, timeout=3)
+        except Exception:
+            continue
+        names = []
+        for line in out.splitlines():
+            line = line.strip()
+            # Lines look like: "  "USB2.0 HD UVC WebCam""
+            if 'DirectShow video devices' in line:
+                continue
+            if line.startswith('"') and line.endswith('"'):
+                # most likely a device line when under the section
+                names.append(line.strip('"'))
+            elif line.startswith('[dshow') and 'Alternative name' in line:
+                # ignore alternative names
+                continue
+        # Heuristic: keep unique order
+        uniq = []
+        for n in names:
+            if n and n not in uniq:
+                uniq.append(n)
+        if uniq:
+            return uniq
+    return []
+
+def _windows_camera_names() -> List[str]:
+    """Best-effort enumeration of camera friendly names on Windows using multiple fallbacks.
+    Returns a list of names in system order (may not strictly map to OpenCV indices).
+    """
+    # cached for 10 seconds
+    now = time.time()
+    if (now - camera_names_cache.get('ts', 0)) < 10 and camera_names_cache.get('names'):
+        return list(camera_names_cache.get('names', []))
+
+    names: List[str] = []
+    # 1) PowerShell CIM (modern)
+    try:
+        ps_cmd = [
+            'powershell', '-NoProfile', '-Command',
+            "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Service -eq 'usbvideo' } | Select-Object -ExpandProperty Name"
+        ]
+        out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=5)
+        names = [line.strip() for line in out.splitlines() if line.strip()]
+    except Exception:
+        names = []
+    # 1.5) PowerShell Get-PnpDevice -Class Camera (fast, Windows 10+)
+    if not names:
+        try:
+            ps_cmd = [
+                'powershell', '-NoProfile', '-Command',
+                "Get-PnpDevice -Class Camera -PresentOnly | Select-Object -ExpandProperty FriendlyName"
+            ]
+            out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=4)
+            names = [line.strip() for line in out.splitlines() if line.strip()]
+        except Exception:
+            names = []
+    # 2) PowerShell WMI (older)
+    if not names:
+        try:
+            ps_cmd = [
+                'powershell', '-NoProfile', '-Command',
+                "Get-WmiObject -Class Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Service -eq 'usbvideo' } | Select-Object -ExpandProperty Name"
+            ]
+            out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=5)
+            names = [line.strip() for line in out.splitlines() if line.strip()]
+        except Exception:
+            names = []
+    # 2.5) Registry under Imaging Devices class GUID (friendly, fast)
+    if not names:
+        try:
+            ps_cmd = [
+                'powershell', '-NoProfile', '-Command',
+                "$g='{6bdd1f00-876a-11d0-9c10-00a0c9223196}'; Get-ChildItem -Path \"HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\$g\" -ErrorAction SilentlyContinue | ForEach-Object { try { (Get-ItemProperty $_.PSPath).FriendlyName } catch {} } | Where-Object { $_ }"
+            ]
+            out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=4)
+            names = [line.strip() for line in out.splitlines() if line.strip()]
+        except Exception:
+            names = []
+    # 3) ffmpeg dshow listing
+    if not names:
+        try:
+            names = _ffmpeg_list_dshow()
+        except Exception:
+            names = []
+    # dedupe, preserve order
+    uniq: List[str] = []
+    for n in names:
+        if n and n not in uniq:
+            uniq.append(n)
+    camera_names_cache['ts'] = time.time()
+    camera_names_cache['names'] = list(uniq)
+    camera_names_cache['source'] = 'powershell/ffmpeg'
+    return uniq
+
 @app.route('/api/cameras')
 @login_required
 def api_cameras():
     # Windows: use PnP names and map to indices without heavy probing
     if os.name == 'nt':
-        names: List[str] = []
-        # simple cache for 10 seconds
-        now = time.time()
-        if (now - camera_names_cache.get("ts", 0)) < 10 and camera_names_cache.get("names"):
-            names = list(camera_names_cache.get("names", []))
-        else:
+        names = _windows_camera_names()
+        # Actively probe indices so we list actual usable indices
+        probed: List[int] = []
+        try_indices = list(range(0, 10))  # probe first 10 indices
+        for i in try_indices:
             try:
-                ps_cmd = [
-                    'powershell', '-NoProfile', '-Command',
-                    "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' -or $_.Service -eq 'usbvideo' } | Select-Object -ExpandProperty Name"
-                ]
-                out = subprocess.check_output(ps_cmd, stderr=subprocess.DEVNULL, text=True, timeout=1)
-                names = [line.strip() for line in out.splitlines() if line.strip()]
-                camera_names_cache["ts"] = now
-                camera_names_cache["names"] = list(names)
+                ok = _probe_camera(i)
             except Exception:
-                names = []
-        count = max(1, len(names))
-        cams = [{"index": i, "name": f"Camera {i}" + (f" - {names[i]}" if i < len(names) else "")} for i in range(count)]
-        return jsonify({"cameras": cams, "selected": CAM_INDEX})
+                ok = False
+            if ok:
+                probed.append(i)
+
+        if not probed:
+            # ensure at least index 0 is listed for user to try
+            probed = [0]
+
+        def label_for(i: int) -> str:
+            base = f"Camera {i}"
+            # Best-effort attach a friendly name by order (may not be exact mapping)
+            suffix = f" - {names[i]}" if (i < len(names)) else (f" - {names[0]}" if (len(names)==1) else "")
+            return base + suffix
+
+        cams = [{"index": i, "name": label_for(i)} for i in probed]
+        return jsonify({
+            "cameras": cams,
+            "selected": CAM_INDEX,
+            "selected_entrance": cam_indices.get('entrance', CAM_INDEX),
+            "selected_monitor": cam_indices.get('monitor', MONITOR_CAM_INDEX),
+            "name_source": camera_names_cache.get('source'),
+        })
 
     # Other OS: lightly probe a few indices
     probed = []
@@ -948,7 +1106,20 @@ def api_cameras():
         except Exception:
             continue
     cams = [{"index": i, "name": f"Camera {i}"} for i in probed]
-    return jsonify({"cameras": cams, "selected": CAM_INDEX})
+    return jsonify({
+        "cameras": cams,
+        "selected": CAM_INDEX,
+        "selected_entrance": cam_indices.get('entrance', CAM_INDEX),
+        "selected_monitor": cam_indices.get('monitor', MONITOR_CAM_INDEX),
+    })
+
+# -----------------------------
+# 모니터링 페이지
+# -----------------------------
+@app.route("/monitor")
+@login_required
+def monitor_page():
+    return render_template("monitor.html")
 
 @app.route('/api/change_password', methods=['POST'])
 @login_required
@@ -991,7 +1162,8 @@ if __name__ == "__main__":
     if requested_model_path:
         print(f"[MODEL] Requested at startup: {requested_model_path}")
 
-    threading.Thread(target=yolo_inference_loop, daemon=True).start()
-    print("✅ YOLO 추론 스레드 시작됨")
+    threading.Thread(target=yolo_inference_loop, args=("entrance",), daemon=True).start()
+    threading.Thread(target=yolo_inference_loop, args=("monitor",), daemon=True).start()
+    print("✅ YOLO 추론 스레드 시작됨 (entrance, monitor)")
     print("🌐 Flask 웹서버 시작 중...")
     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True, use_reloader=False)

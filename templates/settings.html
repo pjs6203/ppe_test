@@ -38,8 +38,12 @@
       </a>
       <div class="navbar-nav ms-auto">
         <a class="nav-link" href="{{ url_for('webcam_page') }}">
-          <i class="fas fa-video me-1"></i>
-          실시간 감지
+          <i class="fas fa-door-open me-1"></i>
+          출입통제
+        </a>
+        <a class="nav-link" href="{{ url_for('monitor_page') }}">
+          <i class="fas fa-eye me-1"></i>
+          모니터링
         </a>
         <a class="nav-link" href="{{ url_for('about') }}">
           <i class="fas fa-info-circle me-1"></i>
@@ -89,9 +93,15 @@
               </div>
 
               <div class="mb-3 row align-items-center">
-                <label class="col-auto col-form-label">카메라</label>
+                <label class="col-auto col-form-label">출입통제 카메라</label>
                 <div class="col">
-                  <select id="camera" class="form-select"></select>
+                  <select id="camera-entrance" class="form-select"></select>
+                </div>
+              </div>
+              <div class="mb-3 row align-items-center">
+                <label class="col-auto col-form-label">모니터링 카메라</label>
+                <div class="col">
+                  <select id="camera-monitor" class="form-select"></select>
                 </div>
               </div>
 
@@ -178,7 +188,7 @@ async function loadSettings(){
   const j = await r.json();
   document.getElementById('resolution').value = j.width && j.height ? `${j.width}x${j.height}` : (j.resolution||'1280x720');
   document.getElementById('fps').value = j.fps||30;
-  await fetchCameras(j.cam_index);
+  await fetchCameras(j);
   document.getElementById('ppe-helmet').checked = (j.ppe||[]).includes('helmet');
   document.getElementById('ppe-vest').checked = (j.ppe||[]).includes('vest');
   document.getElementById('ppe-mask').checked = (j.ppe||[]).includes('mask');
@@ -189,11 +199,12 @@ document.getElementById('save-btn').addEventListener('click', async ()=>{
   const overlay = document.getElementById('page-transition');
   overlay.classList.add('show');
   const payload = {
-    width: parseInt(document.getElementById('resolution').value.split('x')[0],10)||1280,
-    height: parseInt(document.getElementById('resolution').value.split('x')[1],10)||720,
-    fps: parseInt(document.getElementById('fps').value,10)||30,
-    model: document.getElementById('model').value,
-  cam_index: parseInt(document.getElementById('camera').value,10),
+  width: parseInt(document.getElementById('resolution').value.split('x')[0],10)||1280,
+  height: parseInt(document.getElementById('resolution').value.split('x')[1],10)||720,
+  fps: parseInt(document.getElementById('fps').value,10)||30,
+  model: document.getElementById('model').value,
+  entrance_cam_index: parseInt(document.getElementById('camera-entrance').value,10),
+  monitor_cam_index: parseInt(document.getElementById('camera-monitor').value,10),
     ppe: [document.getElementById('ppe-helmet').checked? 'helmet': null, document.getElementById('ppe-vest').checked? 'vest': null, document.getElementById('ppe-mask').checked? 'mask': null].filter(Boolean)
   };
   const r = await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
@@ -211,13 +222,17 @@ fetchModels(); loadSettings();
 async function fetchCameras(selected){
   const r = await fetch('/api/cameras');
   const j = await r.json();
-  const sel = document.getElementById('camera');
-  sel.innerHTML='';
+  const se = document.getElementById('camera-entrance');
+  const sm = document.getElementById('camera-monitor');
+  se.innerHTML=''; sm.innerHTML='';
   (j.cameras||[]).forEach(c=>{
-    const opt = document.createElement('option'); opt.value=c.index; opt.textContent=`${c.name}`; sel.appendChild(opt);
+    const o1 = document.createElement('option'); o1.value=c.index; o1.textContent=`${c.name}`; se.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value=c.index; o2.textContent=`${c.name}`; sm.appendChild(o2);
   });
-  const target = (selected ?? j.selected);
-  if(target!==undefined) sel.value = String(target);
+  const eTarget = (selected?.entrance_cam_index ?? j.selected_entrance ?? j.selected);
+  const mTarget = (selected?.monitor_cam_index ?? j.selected_monitor ?? j.selected);
+  if(eTarget!==undefined) se.value = String(eTarget);
+  if(mTarget!==undefined) sm.value = String(mTarget);
 }
 
 // Password change

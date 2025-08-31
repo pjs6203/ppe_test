@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>모니터링 · PPE 시스템</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mesh.css') }}">
+  <style>
+    .main-container{ padding:2rem 0; }
+    .video-container{ position:relative; border-radius:16px; overflow:hidden; background:#0b1220; display:flex; align-items:center; justify-content:center; }
+    .video-feed{ display:block; max-width:100%; height:auto; max-height:80vh; object-fit:contain; }
+    .alert-floating{ position:fixed; right:16px; bottom:16px; z-index:9999; }
+  </style>
+</head>
+<body class="login-body">
+  <div id="auth-bg" data-turbo-permanent><canvas id="mesh-canvas"></canvas></div>
+  <nav class="navbar navbar-expand-lg navbar-dark" aria-label="Main Navigation">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">
+        <i class="fas fa-shield-alt me-2"></i>
+        PPE 안전장비 감지 시스템
+      </a>
+      <div class="navbar-nav ms-auto">
+        <a class="nav-link" href="{{ url_for('webcam_page') }}">
+          <i class="fas fa-door-open me-1"></i>
+          출입통제
+        </a>
+        <a class="nav-link active" aria-current="page" href="{{ url_for('monitor_page') }}">
+          <i class="fas fa-eye me-1"></i>
+          모니터링
+        </a>
+        <a class="nav-link" href="{{ url_for('about') }}">
+          <i class="fas fa-info-circle me-1"></i>
+          시스템 정보
+        </a>
+        <a class="nav-link" href="{{ url_for('settings') }}" title="설정">
+          <i class="fas fa-cog me-1"></i>
+          설정
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main-container">
+    <div class="container-fluid page-cards">
+      <div class="row mb-3">
+        <div class="col-12">
+          <h1 class="h3 mb-2">
+            <i class="fas fa-eye me-2"></i>
+            작업장 모니터링
+          </h1>
+          <p class="text-muted">모니터링 카메라에서 보호구 미착용자를 감지하면 관리자에게 알림</p>
+        </div>
+      </div>
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">
+                <i class="fas fa-video me-2"></i>
+                모니터링 영상
+              </h5>
+              <a class="btn btn-primary btn-sm" href="/snapshot.jpg?cam=monitor" target="_blank">
+                <i class="fas fa-camera me-1"></i>
+                스냅샷
+              </a>
+            </div>
+            <div class="card-body">
+              <div class="video-container">
+                <img id="video" src="{{ url_for('video_feed') }}?cam=monitor" alt="모니터링" class="video-feed" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="card">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-bell me-2"></i>알림</h5></div>
+            <div class="card-body">
+              <div id="viol-list" class="small text-muted">최근 위반 없음</div>
+            </div>
+          </div>
+          <div class="card mt-4">
+            <div class="card-header"><h6 class="mb-0"><i class="fas fa-gear me-2"></i>상태</h6></div>
+            <div class="card-body">
+              <div>해상도: <span id="stat-res">-</span></div>
+              <div>FPS: <span id="stat-fps">-</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert-floating" id="toast" style="display:none;">
+    <div class="alert alert-danger shadow" role="alert">
+      <i class="fas fa-triangle-exclamation me-1"></i>
+      <span id="toast-msg">안전 위반 감지</span>
+    </div>
+  </div>
+
+  <script>
+    async function poll(){
+      try{
+        const [sr, pr] = await Promise.all([
+          fetch('/api/stream_stats?cam=monitor', {cache:'no-store'}),
+          fetch('/api/ppe_status?cam=monitor', {cache:'no-store'})
+        ]);
+        const s = await sr.json(); const p = await pr.json();
+        document.getElementById('stat-res').textContent = s.resolution || '-';
+        document.getElementById('stat-fps').textContent = (s.fps||0).toFixed(1);
+        // violation when person present and missing_required not empty
+        const missing = Array.isArray(p.missing_required) ? p.missing_required : [];
+        if (p.has_person && missing.length){
+          const msg = `위반 감지: ${missing.join(', ')}`;
+          document.getElementById('toast-msg').textContent = msg;
+          document.getElementById('toast').style.display = 'block';
+          const vl = document.getElementById('viol-list');
+          const line = new Date().toLocaleTimeString() + ' - ' + msg;
+          vl.textContent = (vl.textContent==='최근 위반 없음') ? line : (line + '\n' + vl.textContent);
+          setTimeout(()=>{ document.getElementById('toast').style.display='none'; }, 2500);
+        }
+      }catch(e){ /* ignore */ }
+    }
+    setInterval(poll, 1000);
+    poll();
+  </script>
+</body>
+</html>
